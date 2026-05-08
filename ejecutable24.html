@@ -3514,17 +3514,58 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
             
             // ========== EXPORTAR/IMPORTAR/LIMPIAR ==========
             exportData() {
-                const backup = { version: '2.0.0', exportDate: new Date().toISOString(), data: this.data };
-                const jsonString = JSON.stringify(backup, null, 2);
-                const blob = new Blob([jsonString], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const date = new Date();
-                const filename = `studyos-backup-${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}.studyos`;
-                const a = document.createElement('a');
-                a.href = url; a.download = filename;
-                document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                this.showToast('✅ Datos exportados correctamente', 'success');
+                try {
+                    // Verificar que los datos son serializables y no son demasiado grandes
+                    const testSerialization = JSON.stringify(this.data);
+                    
+                    // Advertencia si los datos son muy grandes (>10MB)
+                    if (testSerialization.length > 10 * 1024 * 1024) {
+                        ConfirmDialog.show('⚠️ Los datos ocupan más de 10MB. ¿Seguro que quieres exportarlos?\n\nPuede tardar unos segundos.', 
+                            () => this.performExport(),
+                            () => this.showToast('Exportación cancelada', 'info')
+                        );
+                    } else {
+                        this.performExport();
+                    }
+                } catch (error) {
+                    console.error('Export error:', error);
+                    this.showToast('❌ Error al exportar: ' + error.message, 'error');
+                }
+            }
+
+            // Método auxiliar para realizar la exportación
+            performExport() {
+                try {
+                    const backup = { 
+                        version: '2.0.0', 
+                        exportDate: new Date().toISOString(), 
+                        data: this.data 
+                    };
+                    
+                    const jsonString = JSON.stringify(backup, null, 2);
+                    const blob = new Blob([jsonString], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const date = new Date();
+                    const filename = `studyos-backup-${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}.studyos`;
+                    
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    a.style.display = 'none';
+                    document.body.appendChild(a);
+                    a.click();
+                    
+                    // Limpiar después de un tiempo para asegurar que la descarga comenzó
+                    setTimeout(() => {
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    }, 100);
+                    
+                    this.showToast('✅ Datos exportados correctamente', 'success');
+                } catch (error) {
+                    console.error('Export error:', error);
+                    this.showToast('❌ Error al exportar: ' + error.message, 'error');
+                }
             }
             
             importData() {
@@ -3536,8 +3577,17 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                     const file = e.target.files[0]; 
                     if (!file) return;
                     
+                    // ========== VALIDACIÓN DE TAMAÑO ==========
+                    const maxSize = 50 * 1024 * 1024; // 50 MB máximo
+                    if (file.size > maxSize) {
+                        this.showToast('❌ El archivo es demasiado grande (máximo 50MB)', 'error');
+                        return;
+                    }
+                    
                     const reader = new FileReader();
                     reader.onload = (event) => {
+                        let loadingOverlay = null;
+                        
                         try {
                             const backup = JSON.parse(event.target.result);
                             
@@ -3585,7 +3635,7 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                                                 this.data.exams.length > 0;
                             
                             const performImport = () => {
-                                const loadingOverlay = LoadingOverlay.show('Importando datos...', 'Procesando archivo de backup');
+                                loadingOverlay = LoadingOverlay.show('Importando datos...', 'Procesando archivo de backup');
                                 let progress = 0;
                                 
                                 const interval = setInterval(() => {
@@ -3612,6 +3662,12 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                                                 }
                                             });
                                             
+                                            // Limpiar observer del radar
+                                            if (this._radarObserver) {
+                                                this._radarObserver.disconnect();
+                                                this._radarObserver = null;
+                                            }
+                                            
                                             this.refreshAllViews();
                                             
                                             if (this.currentView === 'planner') {
@@ -3622,11 +3678,11 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                                             this.updateSubjectSelects();
                                             this.updateExamSubjectSelect();
                                             
-                                            LoadingOverlay.hide();
+                                            if (loadingOverlay) LoadingOverlay.hide();
                                             this.showToast('✅ Datos importados correctamente', 'success');
                                             
                                         } catch (importError) {
-                                            LoadingOverlay.hide();
+                                            if (loadingOverlay) LoadingOverlay.hide();
                                             this.showToast(`❌ Error al importar: ${importError.message}`, 'error');
                                             console.error('Import error:', importError);
                                         }
@@ -3643,6 +3699,7 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                         } catch (error) {
                             console.error('Import error:', error);
                             this.showToast(`❌ Error: ${error.message}`, 'error');
+                            if (loadingOverlay) LoadingOverlay.hide();
                         }
                     };
                     
@@ -3658,101 +3715,111 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
             
             clearAllData() {
                 ConfirmDialog.show('⚠️ ¿Eliminar ABSOLUTAMENTE TODOS los datos?\n\nEsta acción no se puede deshacer.', () => {
-                    const loadingOverlay = LoadingOverlay.show('Limpiando datos...', 'Eliminando toda la información');
-                    let progress = 0;
+                    let loadingOverlay = null;
                     
-                    const interval = setInterval(() => {
-                        progress += 25;
-                        LoadingOverlay.updateProgress(progress);
+                    try {
+                        loadingOverlay = LoadingOverlay.show('Limpiando datos...', 'Eliminando toda la información');
+                        let progress = 0;
                         
-                        if (progress >= 100) {
-                            clearInterval(interval);
+                        const interval = setInterval(() => {
+                            progress += 25;
+                            LoadingOverlay.updateProgress(progress);
                             
-                            try {
-                                // Guardar preferencias que NO deben borrarse
-                                const hasSeenApp = localStorage.getItem('studyos_has_seen_app');
-                                const savedTheme = localStorage.getItem('studyos_theme');
-                                const savedUser = { ...this.data.user };
+                            if (progress >= 100) {
+                                clearInterval(interval);
                                 
-                                // Limpiar localStorage
-                                localStorage.clear();
-                                
-                                // Restaurar preferencias
-                                if (hasSeenApp) localStorage.setItem('studyos_has_seen_app', hasSeenApp);
-                                if (savedTheme) localStorage.setItem('studyos_theme', savedTheme);
-                                
-                                // Reiniciar datos
-                                this.data = {
-                                    tasks: [],
-                                    subjects: [],
-                                    exams: [],
-                                    habits: [],
-                                    objectives: [],
-                                    user: savedUser
-                                };
-                                
-                                // Limpiar cachés
-                                if (this.progressCache) this.progressCache.clear();
-                                if (this.taskIndex) this.taskIndex.clear();
-                                if (this.subjectIndex) this.subjectIndex.clear();
-                                if (this.examIndex) this.examIndex.clear();
-                                
-                                this.buildIndexes();
-                                localStorage.setItem('studyos_pro_v6', JSON.stringify(this.data));
-                                
-                                // Destruir gráficos existentes
-                                ['radar', 'doughnut', 'subjects', 'grades', 'habit'].forEach(chart => {
-                                    if (this.charts[chart]) {
-                                        this.charts[chart].destroy();
-                                        this.charts[chart] = null;
+                                try {
+                                    // Guardar preferencias que NO deben borrarse
+                                    const hasSeenApp = localStorage.getItem('studyos_has_seen_app');
+                                    const savedTheme = localStorage.getItem('studyos_theme');
+                                    const savedUser = { ...this.data.user };
+                                    
+                                    // Limpiar localStorage
+                                    localStorage.clear();
+                                    
+                                    // Restaurar preferencias
+                                    if (hasSeenApp) localStorage.setItem('studyos_has_seen_app', hasSeenApp);
+                                    if (savedTheme) localStorage.setItem('studyos_theme', savedTheme);
+                                    
+                                    // Reiniciar datos
+                                    this.data = {
+                                        tasks: [],
+                                        subjects: [],
+                                        exams: [],
+                                        habits: [],
+                                        objectives: [],
+                                        user: savedUser
+                                    };
+                                    
+                                    // Limpiar cachés
+                                    if (this.progressCache) this.progressCache.clear();
+                                    if (this.taskIndex) this.taskIndex.clear();
+                                    if (this.subjectIndex) this.subjectIndex.clear();
+                                    if (this.examIndex) this.examIndex.clear();
+                                    
+                                    this.buildIndexes();
+                                    localStorage.setItem('studyos_pro_v6', JSON.stringify(this.data));
+                                    
+                                    // Destruir gráficos existentes
+                                    ['radar', 'doughnut', 'subjects', 'grades', 'habit'].forEach(chart => {
+                                        if (this.charts[chart]) {
+                                            this.charts[chart].destroy();
+                                            this.charts[chart] = null;
+                                        }
+                                    });
+                                    
+                                    // Limpiar observer del radar
+                                    if (this._radarObserver) {
+                                        this._radarObserver.disconnect();
+                                        this._radarObserver = null;
                                     }
-                                });
-                                // Limpiar observer del radar
-                                if (this._radarObserver) {
-                                    this._radarObserver.disconnect();
-                                    this._radarObserver = null;
+                                    
+                                    // Cambiar a dashboard y limpiar vistas
+                                    this.switchView('dashboard');
+                                    this.updateSubjectSelects();
+                                    this.updateExamSubjectSelect();
+                                    this.updateUserDisplay();
+                                    this.updateAllSubjectsProgress();
+                                    
+                                    // Marcar todas las vistas como sucias
+                                    this.viewsDirty = {
+                                        planner: true,
+                                        tasks: true,
+                                        subjects: true,
+                                        exams: true,
+                                        habits: true,
+                                        objectives: true
+                                    };
+                                    
+                                    // Renderizar todo de nuevo
+                                    setTimeout(() => {
+                                        this.renderDashboard();
+                                        if (this.currentView === 'planner') {
+                                            this.renderPlanner();
+                                        }
+                                        this.updateRadarChart();
+                                        this.updateDoughnutChart();
+                                        this.updateSubjectsChart();
+                                        this.updateGradesChart();
+                                        this.updateHabitChart();
+                                    }, 50);
+                                    
+                                    if (loadingOverlay) LoadingOverlay.hide();
+                                    this.showToast('✅ Todos los datos han sido eliminados', 'success');
+                                    
+                                } catch (clearError) {
+                                    if (loadingOverlay) LoadingOverlay.hide();
+                                    this.showToast(`❌ Error al limpiar: ${clearError.message}`, 'error');
+                                    console.error('Clear error:', clearError);
                                 }
-                                
-                                // Cambiar a dashboard y limpiar vistas
-                                this.switchView('dashboard');
-                                this.updateSubjectSelects();
-                                this.updateExamSubjectSelect();
-                                this.updateUserDisplay();
-                                this.updateAllSubjectsProgress();
-                                
-                                // Marcar todas las vistas como sucias
-                                this.viewsDirty = {
-                                    planner: true,
-                                    tasks: true,
-                                    subjects: true,
-                                    exams: true,
-                                    habits: true,
-                                    objectives: true
-                                };
-                                
-                                // Renderizar todo de nuevo
-                                setTimeout(() => {
-                                    this.renderDashboard();
-                                    if (this.currentView === 'planner') {
-                                        this.renderPlanner();
-                                    }
-                                    this.updateRadarChart();
-                                    this.updateDoughnutChart();
-                                    this.updateSubjectsChart();
-                                    this.updateGradesChart();
-                                    this.updateHabitChart();
-                                }, 50);
-                                
-                                LoadingOverlay.hide();
-                                this.showToast('✅ Todos los datos han sido eliminados', 'success');
-                                
-                            } catch (clearError) {
-                                LoadingOverlay.hide();
-                                this.showToast(`❌ Error al limpiar: ${clearError.message}`, 'error');
-                                console.error('Clear error:', clearError);
                             }
-                        }
-                    }, 80);
+                        }, 80);
+                        
+                    } catch (error) {
+                        if (loadingOverlay) LoadingOverlay.hide();
+                        this.showToast('❌ Error al iniciar la limpieza', 'error');
+                        console.error('Clear init error:', error);
+                    }
                 }, () => this.showToast('Operación cancelada', 'info'));
             }
             
