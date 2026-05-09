@@ -748,6 +748,42 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
     box-shadow: var(--shadow-sm);
 }
 
+/* Efecto visual para drop externo desde popover */
+.month-cell.drag-over-external {
+    background: rgba(0, 102, 255, 0.15) !important;
+    border: 2px solid var(--primary) !important;
+    transform: scale(1.01);
+    transition: all 0.2s ease;
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.2);
+}
+
+.month-cell.drag-over-external::after {
+    content: "📥 Soltar aquí";
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--primary);
+    color: white;
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    white-space: nowrap;
+    margin-bottom: 8px;
+    pointer-events: none;
+    z-index: 20;
+    font-weight: 500;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    animation: fadeInUp 0.2s ease;
+}
+
+body.dragging-active {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+}
+
 </style>
 
 </head>
@@ -1417,7 +1453,7 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                 this.chartsNeedUpdate = false;
                 this.MAX_ITEMS_PER_LIST = 50;
                 
-                // Drag & Drop y estado temporal
+                // Drag & Drop y estado temporal (sin duplicados)
                 this.draggedEventData = null;
                 this.tempOriginalState = null;
                 this.pendingMove = null;
@@ -1426,6 +1462,8 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                 this._dragCleanup = null;
                 this._currentPopover = null;
                 this._currentDisplayEvents = null;
+                this._activeDragState = null;
+                this._scrollToToday = false;   // <-- NUEVA LÍNEA
                 
                 this.init();
             }
@@ -1626,7 +1664,14 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                     btn.addEventListener('click', () => {
                         document.querySelectorAll('[data-planner-view]').forEach(b => b.classList.remove('active'));
                         btn.classList.add('active');
-                        this.currentPlannerView = btn.dataset.plannerView;
+                        const newView = btn.dataset.plannerView;
+                        
+                        if (newView === 'week' && this.currentPlannerView !== 'week') {
+                            this.currentPlannerDate = new Date();
+                            this._scrollToToday = true; // flag para hacer scroll al hoy
+                        }
+                        
+                        this.currentPlannerView = newView;
                         this.renderPlanner();
                     });
                 });
@@ -1919,6 +1964,9 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                 
                 // SIEMPRE re-renderizar el planificador cuando se navega a él
                 if (viewId === 'planner') {
+                    // Forzar que se muestre la semana actual con el día actual visible
+                    this.currentPlannerDate = new Date();
+                    this._scrollToToday = true;
                     this.renderPlanner();
                 } else if (this.viewsDirty[viewId] || viewId === 'dashboard') {
                     this.renderView(viewId);
@@ -2155,11 +2203,19 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                     const newBoard = container.querySelector('.trello-board');
                     if (newBoard) {
                         requestAnimationFrame(() => {
-                            newBoard.scrollLeft = kanbanScrollLeft;
+                            if (!this._scrollToToday) {
+                                newBoard.scrollLeft = kanbanScrollLeft;
+                            } else {
+                                // Si debemos ir al día actual, no restauramos el scroll anterior
+                                const todayColumn = newBoard.querySelector('.trello-column.today');
+                                if (todayColumn) {
+                                    todayColumn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                                }
+                                this._scrollToToday = false;
+                            }
                         });
                     }
                 }
-                container.scrollLeft = scrollLeft;
             }
             
             renderWeekView() {
@@ -2542,6 +2598,9 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                 let isDragging = false;
 
                 const cancelDrag = () => {
+                    if (document.body.classList.contains('dragging-active')) {
+                        document.body.classList.remove('dragging-active');
+                    }
                     if (dragTimer) clearTimeout(dragTimer);
                     dragTimer = null;
                     if (dragState && dragState.card) {
@@ -2622,6 +2681,7 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                 });
 
                 const startDrag = (e, card, startX, startY) => {
+                    document.body.classList.add('dragging-active');   // ← AÑADIR
                     if (dragState) return;
                     
                     const rect = card.getBoundingClientRect();
@@ -2703,6 +2763,9 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                 };
 
                 const handleMouseUp = () => {
+                    if (document.body.classList.contains('dragging-active')) {
+                        document.body.classList.remove('dragging-active');
+                    }
                     if (!dragState) {
                         document.body.style.userSelect = '';
                         document.body.style.cursor = '';
@@ -2790,52 +2853,50 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
 
                 // ========== DRAG & DROP PARA VISTA MENSUAL (CON EFECTO VISUAL) ==========
                 // Limpiar configuraciones anteriores de month-cell
+                // ========== DRAG & DROP PARA VISTA MENSUAL (VERSIÓN ROBUSTA) ==========
+                // Limpiar configuraciones anteriores de month-cell (si se llama de nuevo)
                 const monthCells = document.querySelectorAll('.month-cell');
                 monthCells.forEach(cell => {
+                    // Eliminar todos los listeners clonando para resetear (como ya hacías)
                     const newCell = cell.cloneNode(true);
                     cell.parentNode.replaceChild(newCell, cell);
-                    
+                });
+
+                // Ahora configuramos los nuevos month-cell con un solo conjunto de eventos
+                document.querySelectorAll('.month-cell').forEach(cell => {
                     // Click en celda vacía (sin evento) - Popover normal
-                    newCell.addEventListener('click', (e) => {
+                    cell.addEventListener('click', (e) => {
                         if (e.target.closest('.event-preview')) return;
-                        this.showDayPopover(newCell.dataset.date, newCell);
+                        this.showDayPopover(cell.dataset.date, cell);
                     });
-                    
+
                     // Configurar eventos draggable en los previews de eventos
-                    const eventPreviews = newCell.querySelectorAll('.event-preview');
+                    const eventPreviews = cell.querySelectorAll('.event-preview');
                     eventPreviews.forEach(preview => {
                         const newPreview = preview.cloneNode(true);
                         preview.parentNode.replaceChild(newPreview, preview);
-                        
-                        // Hacer el elemento arrastrable
+
                         newPreview.setAttribute('draggable', 'true');
-                        
-                        // Estilo para el cursor durante el drag
                         newPreview.style.cursor = 'grab';
-                        
-                        // Iniciar drag
+
                         newPreview.addEventListener('dragstart', (e) => {
+                            document.body.classList.add('dragging-active');   // ← AÑADIR
                             const eventId = newPreview.dataset.eventId;
                             const eventType = newPreview.dataset.eventType;
-                            const sourceDate = newCell.dataset.date;
-                            
+                            const sourceDate = cell.dataset.date;
                             if (!eventId || !eventType) {
                                 e.preventDefault();
                                 return false;
                             }
-                            
-                            // Guardar datos del evento arrastrado
                             e.dataTransfer.setData('text/plain', JSON.stringify({
                                 id: eventId,
                                 type: eventType,
                                 sourceDate: sourceDate
                             }));
                             e.dataTransfer.effectAllowed = 'move';
-                            
-                            // Cambiar cursor durante el drag
                             newPreview.style.cursor = 'grabbing';
                             newPreview.style.opacity = '0.5';
-                            
+
                             this._draggedEvent = {
                                 id: eventId,
                                 type: eventType,
@@ -2843,76 +2904,106 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                                 element: newPreview
                             };
                         });
-                        
-                        // Limpiar después del drag
+
                         newPreview.addEventListener('dragend', (e) => {
+                            if (document.body.classList.contains('dragging-active')) {
+                                document.body.classList.remove('dragging-active');
+                            }
                             newPreview.style.cursor = 'grab';
                             newPreview.style.opacity = '';
-                            // Limpiar todos los efectos visuales de las celdas
                             document.querySelectorAll('.month-cell').forEach(c => {
-                                c.classList.remove('drag-over');
-                                c.classList.remove('drag-over-active');
+                                c.classList.remove('drag-over', 'drag-over-active', 'drag-over-external');
                             });
                             this._draggedEvent = null;
                         });
                     });
-                });
 
-                // Configurar eventos de drag & drop en las celdas con efectos visuales mejorados
-                document.querySelectorAll('.month-cell').forEach(cell => {
-                    // Evento dragover (necesario para permitir drop)
+                    // UNIFICAR dragover y drop
                     cell.addEventListener('dragover', (e) => {
                         e.preventDefault();
                         e.dataTransfer.dropEffect = 'move';
-                        
-                        // Si hay un evento siendo arrastrado y no es la misma celda
-                        if (this._draggedEvent && this._draggedEvent.sourceDate !== cell.dataset.date) {
-                            // Añadir clase de hover
+
+                        // Verificar si hay un evento arrastrado desde celda o desde popover (dataTransfer)
+                        const hasDragData = e.dataTransfer.types.includes('text/plain');
+                        if (hasDragData || (this._draggedEvent && this._draggedEvent.sourceDate !== cell.dataset.date)) {
                             cell.classList.add('drag-over');
-                            
-                            // Efecto pulsante con timeout
                             if (!cell.classList.contains('drag-over-active')) {
                                 cell.classList.add('drag-over-active');
-                                setTimeout(() => {
-                                    if (cell.classList.contains('drag-over-active')) {
-                                        cell.classList.remove('drag-over-active');
-                                    }
-                                }, 300);
+                                setTimeout(() => cell.classList.remove('drag-over-active'), 300);
                             }
                         }
                     });
-                    
-                    // Evento dragleave (cuando el cursor sale de la celda)
-                    cell.addEventListener('dragleave', (e) => {
-                        cell.classList.remove('drag-over');
-                        cell.classList.remove('drag-over-active');
+
+                    cell.addEventListener('dragleave', () => {
+                        cell.classList.remove('drag-over', 'drag-over-active', 'drag-over-external');
                     });
-                    
-                    // Evento drop (cuando se suelta el evento)
+
+                    // Único drop handler
                     cell.addEventListener('drop', (e) => {
                         e.preventDefault();
-                        
-                        // Limpiar estilos de hover
-                        document.querySelectorAll('.month-cell').forEach(c => {
-                            c.classList.remove('drag-over');
-                            c.classList.remove('drag-over-active');
-                        });
-                        
+                        cell.classList.remove('drag-over', 'drag-over-active', 'drag-over-external');
+
+                        // 1) Intento obtener datos desde popover (drag & drop nativo)
+                        let dragData = null;
+                        const rawData = e.dataTransfer.getData('text/plain');
+                        if (rawData) {
+                            try { dragData = JSON.parse(rawData); } catch (err) { /* ignorar */ }
+                        }
+
+                        if (dragData && dragData.id) {
+                            // ORIGEN: POPOVER (arrastre desde popover normal o desde modo movimiento? - pero el modo movimiento no tiene drag externo)
+                            const targetDate = cell.dataset.date;
+                            const sourceDate = dragData.sourceDate;
+                            const eventId = dragData.id;
+                            const eventType = dragData.type;
+                            const eventTitle = dragData.title || 'Evento';
+
+                            if (sourceDate === targetDate) {
+                                this.showToast('No puedes mover un evento al mismo día', 'info');
+                                return;
+                            }
+
+                            this.closeDayPopover(); // cerrar popover de origen
+
+                            ConfirmDialog.show(
+                                `¿Mover "${eventTitle}" del día ${this.formatDate(sourceDate)} al ${this.formatDate(targetDate)}?`,
+                                () => {
+                                    if (eventType === 'task') {
+                                        const task = this.getTaskById(eventId);
+                                        if (task) task.dueDate = targetDate;
+                                    } else if (eventType === 'exam') {
+                                        const exam = this.getExamById(eventId);
+                                        if (exam) exam.date = targetDate;
+                                    } else if (eventType === 'objective') {
+                                        const obj = this.data.objectives.find(o => o.id === eventId);
+                                        if (obj) obj.deadline = targetDate;
+                                    }
+                                    this.buildIndexes();
+                                    this.saveData();
+                                    this.renderPlanner();
+                                    this.showToast(`✅ "${eventTitle}" movido al ${this.formatDate(targetDate)}`, 'success');
+                                    setTimeout(() => {
+                                        const updatedCell = document.querySelector(`.month-cell[data-date="${targetDate}"]`);
+                                        if (updatedCell) {
+                                            this.showMoveModePopover(targetDate, updatedCell, eventId, eventType, eventTitle);
+                                        }
+                                    }, 200);
+                                },
+                                () => this.showToast('Movimiento cancelado', 'info')
+                            );
+                            return;
+                        }
+
+                        // 2) Origen desde CELDA (_draggedEvent)
                         if (!this._draggedEvent) return;
-                        
                         const targetDate = cell.dataset.date;
                         const sourceDate = this._draggedEvent.sourceDate;
-                        
-                        // No hacer nada si es la misma celda
                         if (sourceDate === targetDate) {
                             this.showToast('No puedes mover un evento al mismo día', 'info');
                             return;
                         }
-                        
                         const eventId = this._draggedEvent.id;
                         const eventType = this._draggedEvent.type;
-                        
-                        // Obtener título del evento para el mensaje
                         let eventTitle = '';
                         if (eventType === 'task') {
                             const task = this.getTaskById(eventId);
@@ -2924,22 +3015,16 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                             const obj = this.data.objectives.find(o => o.id === eventId);
                             eventTitle = obj?.title || 'Objetivo';
                         }
-                        
-                        // Guardar referencia a la celda destino para usarla después
-                        const targetCell = cell;
-                        
-                        // Preguntar al usuario antes de mover con mensaje personalizado
+
+                        const targetCell = cell; // para usar en callback
                         ConfirmDialog.show(
                             `¿Mover "${eventTitle}" del día ${this.formatDate(sourceDate)} al ${this.formatDate(targetDate)}?`,
                             () => {
-                                // Efecto visual de éxito en la celda destino
+                                // Efecto visual éxito
                                 targetCell.style.transition = 'background 0.3s ease';
-                                targetCell.style.backgroundColor = 'rgba(16, 185, 129, 0.2)';
-                                setTimeout(() => {
-                                    targetCell.style.backgroundColor = '';
-                                }, 500);
-                                
-                                // Mover el evento
+                                targetCell.style.backgroundColor = 'rgba(16,185,129,0.2)';
+                                setTimeout(() => targetCell.style.backgroundColor = '', 500);
+
                                 if (eventType === 'task') {
                                     const task = this.getTaskById(eventId);
                                     if (task) task.dueDate = targetDate;
@@ -2950,37 +3035,26 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                                     const obj = this.data.objectives.find(o => o.id === eventId);
                                     if (obj) obj.deadline = targetDate;
                                 }
-                                
-                                // Guardar y actualizar
                                 this.buildIndexes();
                                 this.saveData();
                                 this.renderPlanner();
                                 this.showToast(`✅ "${eventTitle}" movido al ${this.formatDate(targetDate)}`, 'success');
-                                
-                                // ========== NUEVO: ABRIR POPOVER DEL DÍA DESTINO ==========
+
                                 setTimeout(() => {
                                     const updatedCell = document.querySelector(`.month-cell[data-date="${targetDate}"]`);
                                     if (updatedCell) {
-                                        // Usar el popover especial de modo movimiento
                                         this.showMoveModePopover(targetDate, updatedCell, eventId, eventType, eventTitle);
                                     }
                                 }, 200);
                             },
                             () => {
-                                // Efecto visual de cancelación en la celda origen
-                                if (this._draggedEvent && this._draggedEvent.element) {
+                                if (this._draggedEvent?.element) {
                                     this._draggedEvent.element.style.transform = 'scale(1)';
-                                    setTimeout(() => {
-                                        if (this._draggedEvent && this._draggedEvent.element) {
-                                            this._draggedEvent.element.style.transform = '';
-                                        }
-                                    }, 300);
+                                    setTimeout(() => { if (this._draggedEvent?.element) this._draggedEvent.element.style.transform = ''; }, 300);
                                 }
                                 this.showToast('Movimiento cancelado', 'info');
                             }
                         );
-                        
-                        // Limpiar estado
                         this._draggedEvent = null;
                     });
                 });
@@ -5158,45 +5232,26 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                 document.body.appendChild(popover);
                 
                 // ========== DRAG & DROP DENTRO DEL POPOVER (OPTIMIZADO) ==========
-                this.setupPopoverDragAndDrop(popover, dateStr);
+                this.setupPopoverDragAndDropComplete(popover, dateStr);
                 
                 // Posicionar el popover
                 setTimeout(() => {
-                    const popoverRect = popover.getBoundingClientRect();
                     const viewportWidth = window.innerWidth;
                     const viewportHeight = window.innerHeight;
-                    const rect = element.getBoundingClientRect();
-                    
                     const popoverWidth = Math.min(420, viewportWidth - 32);
                     popover.style.width = popoverWidth + 'px';
-                    
-                    let left = rect.right + 15;
-                    if (left + popoverWidth > viewportWidth - 16) {
-                        left = rect.left - popoverWidth - 15;
+
+                    // Posición fija: esquina superior derecha
+                    let left = 20; // margen izquierdo
+                    let top = 80; // margen superior (debajo del header)
+
+                    // Ajustar si no cabe verticalmente
+                    const popoverHeight = popover.offsetHeight;
+                    if (top + popoverHeight > viewportHeight - 20) {
+                        top = viewportHeight - popoverHeight - 20;
                     }
-                    if (left < 16) left = 16;
-                    if (left + popoverWidth > viewportWidth - 16) {
-                        left = (viewportWidth - popoverWidth) / 2;
-                    }
-                    
-                    let top = rect.top;
-                    const maxHeight = Math.min(viewportHeight - 32, popoverRect.height);
-                    const spaceBelow = viewportHeight - rect.top - 16;
-                    const spaceAbove = rect.bottom - 16;
-                    
-                    if (spaceBelow >= maxHeight) {
-                        top = rect.top;
-                    } else if (spaceAbove >= maxHeight) {
-                        top = rect.bottom - maxHeight;
-                    } else {
-                        top = Math.max(16, (viewportHeight - maxHeight) / 2);
-                    }
-                    
-                    if (top < 16) top = 16;
-                    if (top + maxHeight > viewportHeight - 16) {
-                        top = viewportHeight - maxHeight - 16;
-                    }
-                    
+                    if (top < 10) top = 10;
+
                     popover.style.left = left + 'px';
                     popover.style.top = top + 'px';
                     popover.style.maxHeight = Math.min(viewportHeight - top - 16, 600) + 'px';
@@ -5405,70 +5460,60 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                 
                 // Posicionar el popover
                 setTimeout(() => {
-                    const popoverRect = popover.getBoundingClientRect();
                     const viewportWidth = window.innerWidth;
                     const viewportHeight = window.innerHeight;
-                    const rect = element.getBoundingClientRect();
-                    
                     const popoverWidth = Math.min(420, viewportWidth - 32);
                     popover.style.width = popoverWidth + 'px';
-                    
-                    let left = rect.right + 15;
-                    if (left + popoverWidth > viewportWidth - 16) {
-                        left = rect.left - popoverWidth - 15;
+
+                    // Posición fija: esquina superior derecha
+                    let left = 20; // margen izquierdo
+                    let top = 80; // margen superior (debajo del header)
+
+                    // Ajustar si no cabe verticalmente
+                    const popoverHeight = popover.offsetHeight;
+                    if (top + popoverHeight > viewportHeight - 20) {
+                        top = viewportHeight - popoverHeight - 20;
                     }
-                    if (left < 16) left = 16;
-                    if (left + popoverWidth > viewportWidth - 16) {
-                        left = (viewportWidth - popoverWidth) / 2;
-                    }
-                    
-                    let top = rect.top;
-                    const maxHeight = Math.min(viewportHeight - 32, popoverRect.height);
-                    const spaceBelow = viewportHeight - rect.top - 16;
-                    const spaceAbove = rect.bottom - 16;
-                    
-                    if (spaceBelow >= maxHeight) {
-                        top = rect.top;
-                    } else if (spaceAbove >= maxHeight) {
-                        top = rect.bottom - maxHeight;
-                    } else {
-                        top = Math.max(16, (viewportHeight - maxHeight) / 2);
-                    }
-                    
-                    if (top < 16) top = 16;
-                    if (top + maxHeight > viewportHeight - 16) {
-                        top = viewportHeight - maxHeight - 16;
-                    }
-                    
+                    if (top < 10) top = 10;
+
                     popover.style.left = left + 'px';
                     popover.style.top = top + 'px';
                     popover.style.maxHeight = Math.min(viewportHeight - top - 16, 600) + 'px';
-                    
-                    // Scroll al evento movido
-                    const movedElement = popover.querySelector(`.day-popover-event[data-event-id="${movedEventId}"]`);
-                    if (movedElement) {
-                        setTimeout(() => {
-                            movedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }, 100);
-                    }
                 }, 10);
             }
 
             // Cerrar popover de modo movimiento
             closeMoveModePopover() {
+                // Limpiar cualquier estado de arrastre activo (por si quedó colgado)
+                if (this._activeDragState && this._activeDragState.cleanup) {
+                    this._activeDragState.cleanup();
+                    this._activeDragState = null;
+                }
                 const popover = document.getElementById('dayPopover');
                 const overlay = document.getElementById('dayPopoverOverlay');
                 if (popover) popover.remove();
                 if (overlay) overlay.remove();
-                
-                document.querySelectorAll('.month-cell').forEach(c => c.classList.remove('drag-over'));
+                document.querySelectorAll('.month-cell').forEach(c => c.classList.remove('drag-over', 'drag-over-active', 'drag-over-external'));
             }
 
-            // ========== MÉTODO: Configurar Drag & Drop del Popover (con eventos de ratón, estilo Kanban) ==========
-            setupPopoverDragAndDrop(popover, dateStr) {
+            // ========== MÉTODO AUXILIAR: Escape HTML para prevenir XSS ==========
+            escapeHtml(text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            setupPopoverDragAndDropComplete(popover, dateStr) {
                 const eventsContainer = popover.querySelector('.day-popover-events-container');
                 if (!eventsContainer) return;
-                
+
+                // Limpiar cualquier drag anterior que pudiera quedar activo
+                if (this._activeDragState && this._activeDragState.cleanup) {
+                    this._activeDragState.cleanup();
+                }
+
+                const overlay = document.getElementById('dayPopoverOverlay'); // puede ser null
                 let dragState = {
                     isDragging: false,
                     element: null,
@@ -5478,14 +5523,19 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                     offsetY: 0,
                     startX: 0,
                     startScrollTop: 0,
-                    rafId: null
+                    rafId: null,
+                    isExternal: false,
+                    targetCell: null,
+                    dragData: null,
+                    mouseMoveHandler: null,
+                    mouseUpHandler: null,
+                    cleanup: null
                 };
-                
-                // Configurar eventos para cada elemento
+
                 const eventElements = popover.querySelectorAll('.day-popover-event');
-                
+
                 eventElements.forEach(eventEl => {
-                    // Click para editar (excepto en botones)
+                    // Click para editar (solo si no es el evento movido en modo movimiento, pero aquí siempre se puede editar)
                     const contentEl = eventEl.querySelector('.day-popover-event-content');
                     if (contentEl) {
                         contentEl.addEventListener('click', (e) => {
@@ -5495,7 +5545,7 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                             this.editEventFromDayPopover(eventEl.dataset.eventType, eventEl.dataset.eventId);
                         });
                     }
-                    
+
                     // Botón completar
                     const completeBtn = eventEl.querySelector('[data-action="complete"]');
                     if (completeBtn) {
@@ -5504,32 +5554,31 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                             this.completeTaskFromPopover(eventEl.dataset.eventId);
                         });
                     }
-                    
-                    // Eventos de ratón para drag (estilo Kanban)
+
                     eventEl.style.cursor = 'grab';
-                    
-                    eventEl.addEventListener('mousedown', (e) => {
+                    eventEl.setAttribute('draggable', 'false');
+
+                    const mousedownHandler = (e) => {
                         if (e.target.closest('button')) return;
                         e.preventDefault();
-                        
+                        document.body.classList.add('dragging-active');
+
                         const rect = eventEl.getBoundingClientRect();
-                        const containerRect = eventsContainer.getBoundingClientRect();
-                        
                         dragState.startY = e.clientY;
                         dragState.startX = e.clientX;
                         dragState.offsetY = e.clientY - rect.top;
                         dragState.element = eventEl;
                         dragState.startScrollTop = eventsContainer.scrollTop;
-                        
-                        // Timeout para diferenciar click de drag
-                        const dragTimer = setTimeout(() => {
+                        dragState.isDragging = false;
+                        dragState.isExternal = false;
+                        dragState.targetCell = null;
+
+                        let dragTimer = setTimeout(() => {
                             dragState.isDragging = true;
-                            
-                            // Aplicar estilo a la tarjeta original
                             eventEl.style.opacity = '0.4';
                             eventEl.style.transition = 'opacity 0.15s ease';
-                            
-                            // Crear clon
+
+                            // Clon interno
                             dragState.clone = eventEl.cloneNode(true);
                             dragState.clone.classList.add('day-popover-event-drag-clone');
                             dragState.clone.style.cssText = `
@@ -5539,7 +5588,7 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                                 width: ${rect.width}px;
                                 opacity: 0.85;
                                 transform: rotate(3deg) scale(1.02);
-                                box-shadow: 0 25px 40px -12px rgba(0, 0, 0, 0.35);
+                                box-shadow: 0 25px 40px -12px rgba(0,0,0,0.35);
                                 z-index: 10000;
                                 pointer-events: none;
                                 transition: none;
@@ -5548,28 +5597,24 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                                 margin: 0;
                             `;
                             document.body.appendChild(dragState.clone);
-                            
-                            // Crear placeholder
+
                             dragState.placeholder = document.createElement('div');
                             dragState.placeholder.className = 'day-popover-event-placeholder';
                             dragState.placeholder.style.cssText = `
                                 height: ${rect.height}px;
-                                background: rgba(0, 102, 255, 0.1);
+                                background: rgba(0,102,255,0.1);
                                 border: 2px dashed var(--primary);
                                 border-radius: var(--radius-lg);
                                 margin-bottom: 8px;
-                                transition: all 0.2s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+                                transition: all 0.2s cubic-bezier(0.2,0.9,0.4,1.1);
                             `;
-                            
-                            // Insertar placeholder
                             eventEl.parentNode.insertBefore(dragState.placeholder, eventEl);
                             eventEl.style.display = 'none';
-                            
-                            // Cambiar cursor
+
                             document.body.style.cursor = 'grabbing';
                             document.body.style.userSelect = 'none';
                         }, 150);
-                        
+
                         const mouseMoveHandler = (moveEvent) => {
                             if (!dragState.isDragging) {
                                 const dx = Math.abs(moveEvent.clientX - dragState.startX);
@@ -5577,7 +5622,7 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                                 if (dx > 5 || dy > 5) {
                                     clearTimeout(dragTimer);
                                     dragState.isDragging = true;
-                                    // Forzar inicio del drag
+                                    // Forzar inicio (código similar al timeout)
                                     const rect = eventEl.getBoundingClientRect();
                                     dragState.clone = eventEl.cloneNode(true);
                                     dragState.clone.classList.add('day-popover-event-drag-clone');
@@ -5588,7 +5633,7 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                                         width: ${rect.width}px;
                                         opacity: 0.85;
                                         transform: rotate(3deg) scale(1.02);
-                                        box-shadow: 0 25px 40px -12px rgba(0, 0, 0, 0.35);
+                                        box-shadow: 0 25px 40px -12px rgba(0,0,0,0.35);
                                         z-index: 10000;
                                         pointer-events: none;
                                         transition: none;
@@ -5597,16 +5642,14 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                                         margin: 0;
                                     `;
                                     document.body.appendChild(dragState.clone);
-                                    
                                     dragState.placeholder = document.createElement('div');
-                                    dragState.placeholder.className = 'day-popover-event-placeholder';
                                     dragState.placeholder.style.cssText = `
                                         height: ${rect.height}px;
-                                        background: rgba(0, 102, 255, 0.1);
+                                        background: rgba(0,102,255,0.1);
                                         border: 2px dashed var(--primary);
                                         border-radius: var(--radius-lg);
                                         margin-bottom: 8px;
-                                        transition: all 0.2s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+                                        transition: all 0.2s cubic-bezier(0.2,0.9,0.4,1.1);
                                     `;
                                     eventEl.parentNode.insertBefore(dragState.placeholder, eventEl);
                                     eventEl.style.display = 'none';
@@ -5616,82 +5659,183 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                                 }
                                 return;
                             }
-                            
+
                             if (dragState.rafId) cancelAnimationFrame(dragState.rafId);
                             dragState.rafId = requestAnimationFrame(() => {
-                                // Mover clon
                                 if (dragState.clone) {
                                     dragState.clone.style.left = `${moveEvent.clientX - 10}px`;
                                     dragState.clone.style.top = `${moveEvent.clientY - dragState.offsetY}px`;
                                 }
-                                
-                                // Encontrar elemento debajo del cursor
-                                const elemBelow = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
-                                const targetEvent = elemBelow?.closest('.day-popover-event');
-                                const targetContainer = elemBelow?.closest('.day-popover-events-container');
-                                
-                                // Limpiar clases drag-over
-                                document.querySelectorAll('.day-popover-event.drag-over').forEach(el => {
-                                    if (el !== targetEvent) el.classList.remove('drag-over');
-                                });
-                                
-                                if (targetEvent && targetEvent !== dragState.element && dragState.placeholder) {
-                                    targetEvent.classList.add('drag-over');
-                                    
-                                    // Calcular posición de inserción
-                                    const rect = targetEvent.getBoundingClientRect();
-                                    const mouseY = moveEvent.clientY;
-                                    const isAfter = mouseY > rect.top + rect.height / 2;
-                                    
-                                    if (isAfter) {
-                                        targetEvent.parentNode.insertBefore(dragState.placeholder, targetEvent.nextSibling);
-                                    } else {
-                                        targetEvent.parentNode.insertBefore(dragState.placeholder, targetEvent);
+
+                                const popoverRect = popover.getBoundingClientRect();
+                                const isOutside = (
+                                    moveEvent.clientX < popoverRect.left ||
+                                    moveEvent.clientX > popoverRect.right ||
+                                    moveEvent.clientY < popoverRect.top ||
+                                    moveEvent.clientY > popoverRect.bottom
+                                );
+
+                                if (isOutside && !dragState.isExternal) {
+                                    dragState.isExternal = true;
+
+                                    // Ocultar popover y overlay
+                                    if (popover && popover.style) popover.style.display = 'none';
+                                    const currentOverlay = document.getElementById('dayPopoverOverlay');
+                                    if (currentOverlay) currentOverlay.style.display = 'none';
+
+                                    if (dragState.placeholder?.parentNode) dragState.placeholder.remove();
+                                    if (dragState.clone) dragState.clone.remove();
+
+                                    dragState.element.style.display = '';
+                                    dragState.element.style.opacity = '0.4';
+
+                                    const eventId = dragState.element.dataset.eventId;
+                                    const eventType = dragState.element.dataset.eventType;
+                                    const titleEl = dragState.element.querySelector('.day-popover-event-title');
+                                    let eventTitle = 'Evento';
+                                    if (titleEl) eventTitle = titleEl.childNodes[0]?.nodeValue?.trim() || 'Evento';
+                                    dragState.dragData = { id: eventId, type: eventType, title: eventTitle, sourceDate: dateStr };
+
+                                    const shortTitle = eventTitle.length > 20 ? eventTitle.substring(0, 17) + '...' : eventTitle;
+                                    dragState.clone = document.createElement('div');
+                                    dragState.clone.className = 'day-popover-event-drag-clone-external';
+                                    dragState.clone.innerHTML = `<div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-arrows-alt" style="font-size:12px;"></i><span style="font-weight:500;">${this.escapeHtml(shortTitle)}</span></div>`;
+                                    dragState.clone.style.cssText = `
+                                        position: fixed;
+                                        top: ${moveEvent.clientY - dragState.offsetY}px;
+                                        left: ${moveEvent.clientX - 10}px;
+                                        padding: 6px 12px;
+                                        background: var(--primary);
+                                        color: white;
+                                        border-radius: 40px;
+                                        font-size: 12px;
+                                        font-weight: 500;
+                                        white-space: nowrap;
+                                        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                                        z-index: 10000;
+                                        pointer-events: none;
+                                        transition: none;
+                                        backdrop-filter: blur(4px);
+                                    `;
+                                    document.body.appendChild(dragState.clone);
+
+                                    dragState.element.style.display = 'none';
+                                    document.body.style.cursor = 'grabbing';
+                                }
+
+                                if (dragState.isExternal) {
+                                    if (dragState.clone) {
+                                        dragState.clone.style.left = `${moveEvent.clientX - 10}px`;
+                                        dragState.clone.style.top = `${moveEvent.clientY - dragState.offsetY}px`;
                                     }
-                                } else if (targetContainer && dragState.placeholder && dragState.placeholder.parentNode !== targetContainer) {
-                                    targetContainer.appendChild(dragState.placeholder);
+                                    const elemBelow = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+                                    const targetCell = elemBelow?.closest('.month-cell');
+                                    document.querySelectorAll('.month-cell').forEach(cell => cell.classList.remove('drag-over-external'));
+                                    if (targetCell && targetCell.dataset.date !== dateStr) {
+                                        targetCell.classList.add('drag-over-external');
+                                        dragState.targetCell = targetCell;
+                                    } else {
+                                        dragState.targetCell = null;
+                                    }
+                                } else {
+                                    const elemBelow = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+                                    const targetEvent = elemBelow?.closest('.day-popover-event');
+                                    document.querySelectorAll('.day-popover-event.drag-over').forEach(el => el.classList.remove('drag-over'));
+                                    if (targetEvent && targetEvent !== dragState.element && dragState.placeholder) {
+                                        targetEvent.classList.add('drag-over');
+                                        const rect = targetEvent.getBoundingClientRect();
+                                        const isAfter = moveEvent.clientY > rect.top + rect.height / 2;
+                                        if (isAfter) {
+                                            targetEvent.parentNode.insertBefore(dragState.placeholder, targetEvent.nextSibling);
+                                        } else {
+                                            targetEvent.parentNode.insertBefore(dragState.placeholder, targetEvent);
+                                        }
+                                    }
                                 }
                             });
                         };
-                        
+
                         const mouseUpHandler = () => {
+                            if (document.body.classList.contains('dragging-active')) {
+                                document.body.classList.remove('dragging-active');
+                            }
                             clearTimeout(dragTimer);
                             document.removeEventListener('mousemove', mouseMoveHandler);
                             document.removeEventListener('mouseup', mouseUpHandler);
-                            
+
+                            // Restaurar popover/overlay solo si aún existen en el DOM
+                            if (popover && popover.parentNode && popover.style.display === 'none') {
+                                popover.style.display = '';
+                                const currentOverlay = document.getElementById('dayPopoverOverlay');
+                                if (currentOverlay) currentOverlay.style.display = '';
+                            }
+
                             if (dragState.isDragging) {
-                                // Finalizar drag
-                                if (dragState.clone) dragState.clone.remove();
-                                
-                                if (dragState.placeholder && dragState.placeholder.parentNode) {
-                                    // Reemplazar placeholder con el elemento original
-                                    dragState.placeholder.parentNode.replaceChild(dragState.element, dragState.placeholder);
-                                    dragState.element.style.display = '';
-                                    dragState.element.style.opacity = '';
-                                    
-                                    // Guardar el nuevo orden
-                                    this.savePopoverOrder(dateStr);
-                                } else if (dragState.element) {
-                                    dragState.element.style.display = '';
-                                    dragState.element.style.opacity = '';
+                                if (dragState.isExternal) {
+                                    if (dragState.targetCell && dragState.dragData) {
+                                        const targetDate = dragState.targetCell.dataset.date;
+                                        const sourceDate = dateStr;
+                                        const { id, type, title } = dragState.dragData;
+                                        if (sourceDate !== targetDate) {
+                                            this.closeDayPopover();
+                                            ConfirmDialog.show(
+                                                `¿Mover "${title}" del día ${this.formatDate(sourceDate)} al ${this.formatDate(targetDate)}?`,
+                                                () => {
+                                                    if (type === 'task') {
+                                                        const task = this.getTaskById(id);
+                                                        if (task) task.dueDate = targetDate;
+                                                    } else if (type === 'exam') {
+                                                        const exam = this.getExamById(id);
+                                                        if (exam) exam.date = targetDate;
+                                                    } else if (type === 'objective') {
+                                                        const obj = this.data.objectives.find(o => o.id === id);
+                                                        if (obj) obj.deadline = targetDate;
+                                                    }
+                                                    this.buildIndexes();
+                                                    this.saveData();
+                                                    this.renderPlanner();
+                                                    this.showToast(`✅ "${title}" movido al ${this.formatDate(targetDate)}`, 'success');
+                                                    setTimeout(() => {
+                                                        const updatedCell = document.querySelector(`.month-cell[data-date="${targetDate}"]`);
+                                                        if (updatedCell) this.showMoveModePopover(targetDate, updatedCell, id, type, title);
+                                                    }, 200);
+                                                },
+                                                () => this.showToast('Movimiento cancelado', 'info')
+                                            );
+                                        } else {
+                                            this.showToast('No puedes mover un evento al mismo día', 'info');
+                                            if (dragState.element) {
+                                                dragState.element.style.display = '';
+                                                dragState.element.style.opacity = '';
+                                            }
+                                        }
+                                    } else {
+                                        if (dragState.element) {
+                                            dragState.element.style.display = '';
+                                            dragState.element.style.opacity = '';
+                                        }
+                                    }
+                                    if (dragState.clone) dragState.clone.remove();
+                                    document.querySelectorAll('.month-cell').forEach(cell => cell.classList.remove('drag-over-external'));
+                                } else {
+                                    if (dragState.placeholder?.parentNode) {
+                                        dragState.placeholder.parentNode.replaceChild(dragState.element, dragState.placeholder);
+                                        dragState.element.style.display = '';
+                                        dragState.element.style.opacity = '';
+                                        this.savePopoverOrder(dateStr);
+                                    }
+                                    if (dragState.clone) dragState.clone.remove();
+                                    document.querySelectorAll('.day-popover-event.drag-over').forEach(el => el.classList.remove('drag-over'));
                                 }
-                                
-                                // Limpiar clases
-                                document.querySelectorAll('.day-popover-event.drag-over').forEach(el => {
-                                    el.classList.remove('drag-over');
-                                });
-                                
                                 document.body.style.cursor = '';
                                 document.body.style.userSelect = '';
                             } else {
-                                // Fue un click, no un drag
-                                if (dragState.element) {
-                                    dragState.element.style.opacity = '';
-                                }
+                                if (dragState.element) dragState.element.style.opacity = '';
                             }
-                            
+
                             if (dragState.rafId) cancelAnimationFrame(dragState.rafId);
-                            dragState = {
+                            // Limpiar dragState
+                            Object.assign(dragState, {
                                 isDragging: false,
                                 element: null,
                                 clone: null,
@@ -5700,32 +5844,47 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                                 offsetY: 0,
                                 startX: 0,
                                 startScrollTop: 0,
-                                rafId: null
-                            };
+                                rafId: null,
+                                isExternal: false,
+                                targetCell: null,
+                                dragData: null
+                            });
                         };
-                        
+
+                        // Almacenar referencias para limpieza global
+                        dragState.mouseMoveHandler = mouseMoveHandler;
+                        dragState.mouseUpHandler = mouseUpHandler;
                         document.addEventListener('mousemove', mouseMoveHandler);
                         document.addEventListener('mouseup', mouseUpHandler);
-                    });
-                    
-                    eventEl.addEventListener('dragstart', (e) => {
-                        e.preventDefault();
-                        return false;
-                    });
-                });
-                
-                // Prevenir comportamiento por defecto del container
-                eventsContainer.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                });
-            }
+                    };
 
-            // ========== MÉTODO AUXILIAR: Escape HTML para prevenir XSS ==========
-            escapeHtml(text) {
-                if (!text) return '';
-                const div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
+                    eventEl.addEventListener('mousedown', mousedownHandler);
+                    eventEl.addEventListener('dragstart', (e) => e.preventDefault());
+                });
+
+                eventsContainer.addEventListener('dragover', (e) => e.preventDefault());
+
+                // Función de limpieza para abortar si es necesario
+                dragState.cleanup = () => {
+                    if (document.body.classList.contains('dragging-active')) {
+                        document.body.classList.remove('dragging-active');
+                    }
+                    if (dragState.mouseMoveHandler) {
+                        document.removeEventListener('mousemove', dragState.mouseMoveHandler);
+                        document.removeEventListener('mouseup', dragState.mouseUpHandler);
+                    }
+                    if (dragState.rafId) cancelAnimationFrame(dragState.rafId);
+                    if (dragState.clone) dragState.clone.remove();
+                    if (dragState.placeholder?.parentNode) dragState.placeholder.remove();
+                    if (dragState.element) {
+                        dragState.element.style.display = '';
+                        dragState.element.style.opacity = '';
+                    }
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                    document.querySelectorAll('.month-cell').forEach(c => c.classList.remove('drag-over-external'));
+                };
+                this._activeDragState = dragState;
             }
 
             // Drag & drop específico para modo movimiento (solo el evento movido es arrastrable)
@@ -5753,6 +5912,7 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                 draggedEvent.addEventListener('mousedown', (e) => {
                     if (e.target.closest('button')) return;
                     e.preventDefault();
+                    document.body.classList.add('dragging-active');
                     
                     // Mostrar mensaje si intenta arrastrar otro evento (esto ya no debería pasar porque solo este es draggable)
                     const rect = draggedEvent.getBoundingClientRect();
@@ -5878,6 +6038,9 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                     };
                     
                     const mouseUpHandler = () => {
+                        if (document.body.classList.contains('dragging-active')) {
+                            document.body.classList.remove('dragging-active');
+                        }
                         clearTimeout(dragTimer);
                         document.removeEventListener('mousemove', mouseMoveHandler);
                         document.removeEventListener('mouseup', mouseUpHandler);
@@ -5933,11 +6096,10 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                     this._dragCleanup();
                     this._dragCleanup = null;
                 }
-                if (this._currentPopover) {
+                if (this._currentPopover && this._currentPopover.parentNode) {
                     this._currentPopover.remove();
                     this._currentPopover = null;
                 }
-                
                 this.pendingMove = null;
                 this.savedOrder = null;
                 this.savedTargetDate = null;
@@ -5946,17 +6108,16 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
             }
 
             closeDayPopover() {
-                // Limpiar estado pendiente
                 this.cleanupPendingMove();
-                
-                // Eliminar popover y overlay del DOM
+                if (this._activeDragState && this._activeDragState.cleanup) {
+                    this._activeDragState.cleanup();
+                    this._activeDragState = null;
+                }
                 const popover = document.getElementById('dayPopover');
                 const overlay = document.getElementById('dayPopoverOverlay');
                 if (popover) popover.remove();
                 if (overlay) overlay.remove();
-                
-                // Limpiar clases drag-over de las celdas
-                document.querySelectorAll('.month-cell').forEach(c => c.classList.remove('drag-over'));
+                document.querySelectorAll('.month-cell').forEach(c => c.classList.remove('drag-over', 'drag-over-active', 'drag-over-external'));
             }
 
             /**
@@ -6037,55 +6198,45 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
             completeTaskFromPopover(taskId) {
                 const task = this.getTaskById(taskId);
                 if (!task || task.status === 'completada') return;
-                
-                // Mostrar confirmación antes de completar
+
                 ConfirmDialog.show(
                     `¿Marcar "${task.title}" como completada?`,
                     () => {
-                        // Completar la tarea
                         task.status = 'completada';
                         this.updateAllSubjectsProgress();
                         this.saveData();
-                        
-                        // Obtener la fecha del evento para actualizar la celda del calendario
+
                         const eventDate = task.dueDate;
-                        
-                        // ELIMINAR LA TAREA DEL POPOVER ACTUAL SIN CERRARLO
                         const currentPopover = document.getElementById('dayPopover');
                         let wasEventRemoved = false;
-                        
+
                         if (currentPopover) {
-                            // Buscar el elemento del evento
                             const eventElement = currentPopover.querySelector(`.day-popover-event[data-event-id="${taskId}"]`);
                             if (eventElement) {
-                                // Eliminar el evento del DOM
                                 eventElement.remove();
                                 wasEventRemoved = true;
-                                
-                                // Actualizar el contador de eventos en el header
                                 const eventsContainer = currentPopover.querySelector('.day-popover-events-container');
                                 const remainingEvents = eventsContainer.querySelectorAll('.day-popover-event').length;
                                 const counterElement = currentPopover.querySelector('.day-popover-header + div');
                                 if (counterElement) {
                                     counterElement.innerHTML = `${remainingEvents} evento${remainingEvents !== 1 ? 's' : ''} este día`;
                                 }
-                                
-                                // Si no quedan eventos, mostrar mensaje de vacío
                                 if (remainingEvents === 0) {
                                     eventsContainer.innerHTML = '<div class="day-popover-empty">📭 No hay eventos para este día</div>';
+                                } else {
+                                    // Reindexar el orden de los eventos restantes
+                                    this.savePopoverOrder(eventDate);
                                 }
                             }
                         }
-                        
-                        // ACTUALIZAR EL CALENDARIO MENSUAL - Eliminar el evento de la celda origen
+
+                        // Eliminar del calendario mensual
                         if (eventDate) {
                             const sourceCell = document.querySelector(`.month-cell[data-date="${eventDate}"]`);
                             if (sourceCell) {
                                 const eventPreview = sourceCell.querySelector(`.event-preview[data-event-id="${taskId}"]`);
                                 if (eventPreview) {
                                     eventPreview.remove();
-                                    
-                                    // Si no quedan eventos en la celda, mostrar placeholder
                                     const remainingEvents = sourceCell.querySelectorAll('.event-preview').length;
                                     const eventsContainer = sourceCell.querySelector('.month-cell-events');
                                     if (remainingEvents === 0 && eventsContainer) {
@@ -6095,34 +6246,23 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
                                 }
                             }
                         }
-                        
-                        // Actualizar la vista de tareas si está visible
+
                         this.viewsDirty.tasks = true;
-                        if (this.currentView === 'tasks') {
-                            setTimeout(() => this.renderTasks(), 50);
-                        }
-                        
-                        // Actualizar también la tarjeta Kanban (vista semanal)
+                        if (this.currentView === 'tasks') setTimeout(() => this.renderTasks(), 50);
+
                         const kanbanCard = document.querySelector(`.kanban-card[data-event-id="${taskId}"]`);
-                        if (kanbanCard) {
-                            kanbanCard.remove();
-                        }
-                        
+                        if (kanbanCard) kanbanCard.remove();
+
                         this.showToast(`✅ "${task.title}" completada!`, 'success');
-                        
-                        // Si el popover se quedó vacío y estamos en modo movimiento, cerrarlo automáticamente
+
                         if (wasEventRemoved && currentPopover) {
                             const remainingEvents = currentPopover.querySelectorAll('.day-popover-event').length;
                             if (remainingEvents === 0) {
-                                setTimeout(() => {
-                                    this.closeDayPopover();
-                                }, 1500);
+                                setTimeout(() => this.closeDayPopover(), 1500);
                             }
                         }
                     },
-                    () => {
-                        this.showToast('Operación cancelada', 'info');
-                    }
+                    () => this.showToast('Operación cancelada', 'info')
                 );
             }
 
