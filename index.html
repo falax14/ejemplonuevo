@@ -784,6 +784,35 @@ body.dragging-active {
     -ms-user-select: none !important;
 }
 
+/* ===== BOTÓN COMPLETAR EN KANBAN (MISMO ESTILO QUE POPOVER) ===== */
+.trello-card-complete-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid var(--border-medium);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    color: transparent;
+    font-size: 12px;
+    margin-left: 8px;
+}
+.trello-card-complete-btn:hover {
+    border-color: var(--success);
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+}
+.trello-card-complete-btn.completed {
+    background: var(--success);
+    border-color: var(--success);
+    color: white;
+    cursor: default;
+}
+
 </style>
 
 </head>
@@ -2267,7 +2296,8 @@ body.dragging-active {
                 let subjectHTML = '';
                 let timeHTML = '';
                 let badgeHTML = '';
-                
+                let completeButton = '';  // nuevo: botón de completar
+
                 if (event.type === 'task') {
                     const task = this.getTaskById(event.id);
                     if (task) {
@@ -2299,6 +2329,15 @@ body.dragging-active {
                                 <span class="trello-card-badge" style="background: rgba(0,0,0,0.05);">${priorityLabels[task.priority]}</span>
                             </div>
                         `;
+                        
+                        // Añadir botón de completar si la tarea NO está completada
+                        if (task.status !== 'completada') {
+                            completeButton = `
+                                <button class="trello-card-complete-btn" data-task-id="${event.id}" title="Completar tarea">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            `;
+                        }
                     }
                 } else if (event.type === 'exam') {
                     icon = '📚';
@@ -2346,9 +2385,12 @@ body.dragging-active {
                         data-event-id="${event.id}" 
                         data-event-type="${event.type}"
                         style="border-left-color: ${borderColor};">
-                        <div class="trello-card-title">
-                            <span class="trello-card-icon">${icon}</span>
-                            <span>${event.title}</span>
+                        <div class="trello-card-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div class="trello-card-title">
+                                <span class="trello-card-icon">${icon}</span>
+                                <span>${event.title}</span>
+                            </div>
+                            ${completeButton}
                         </div>
                         ${subjectHTML}
                         ${badgeHTML}
@@ -3058,6 +3100,25 @@ body.dragging-active {
                         this._draggedEvent = null;
                     });
                 });
+                // ========== DELEGACIÓN PARA COMPLETAR TAREAS DESDE KANBAN ==========
+                const trelloBoard = document.querySelector('.trello-board');
+                if (trelloBoard) {
+                    if (this._kanbanCompleteHandler) {
+                        trelloBoard.removeEventListener('click', this._kanbanCompleteHandler);
+                    }
+                    this._kanbanCompleteHandler = (e) => {
+                        const btn = e.target.closest('.trello-card-complete-btn');
+                        if (!btn) return;
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const taskId = btn.dataset.taskId;
+                        if (taskId) {
+                            const card = btn.closest('.trello-card');
+                            this.completeTaskFromKanban(taskId, card);
+                        }
+                    };
+                    trelloBoard.addEventListener('click', this._kanbanCompleteHandler);
+                }
            }
 
            updateEventInDOM(type, id, oldDate, newDate) {
@@ -6261,6 +6322,58 @@ body.dragging-active {
                                 setTimeout(() => this.closeDayPopover(), 1500);
                             }
                         }
+                    },
+                    () => this.showToast('Operación cancelada', 'info')
+                );
+            }
+
+            completeTaskFromKanban(taskId, cardElement) {
+                const task = this.getTaskById(taskId);
+                if (!task || task.status === 'completada') return;
+
+                ConfirmDialog.show(
+                    `¿Marcar "${task.title}" como completada?`,
+                    () => {
+                        task.status = 'completada';
+                        this.updateAllSubjectsProgress();
+                        this.saveData();
+
+                        // Eliminar tarjeta Kanban con verificación adicional
+                        let cardRemoved = false;
+                        if (cardElement && cardElement.parentNode) {
+                            cardElement.remove();
+                            cardRemoved = true;
+                        } else {
+                            const foundCard = document.querySelector(`.trello-card[data-event-id="${taskId}"]`);
+                            if (foundCard) {
+                                foundCard.remove();
+                                cardRemoved = true;
+                            }
+                        }
+                        if (!cardRemoved) {
+                            console.warn(`No se encontró la tarjeta Kanban para la tarea ${taskId}`);
+                        }
+
+                        // Actualizar calendario mensual y otras vistas (igual que en el otro método)
+                        const eventDate = task.dueDate;
+                        if (eventDate) {
+                            const sourceCell = document.querySelector(`.month-cell[data-date="${eventDate}"]`);
+                            if (sourceCell) {
+                                const eventPreview = sourceCell.querySelector(`.event-preview[data-event-id="${taskId}"]`);
+                                if (eventPreview) eventPreview.remove();
+                                const remainingEvents = sourceCell.querySelectorAll('.event-preview').length;
+                                const eventsContainer = sourceCell.querySelector('.month-cell-events');
+                                if (remainingEvents === 0 && eventsContainer) {
+                                    eventsContainer.innerHTML = '<div style="color: var(--text-tertiary); text-align: center; padding: 4px;">-</div>';
+                                    sourceCell.classList.remove('has-events');
+                                }
+                            }
+                        }
+
+                        this.viewsDirty.tasks = true;
+                        if (this.currentView === 'tasks') setTimeout(() => this.renderTasks(), 50);
+
+                        this.showToast(`✅ "${task.title}" completada!`, 'success');
                     },
                     () => this.showToast('Operación cancelada', 'info')
                 );
