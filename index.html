@@ -813,6 +813,24 @@ body.dragging-active {
     cursor: default;
 }
 
+/* Celda seleccionada (fecha activa para sincronización con semana) */
+.month-cell.selected {
+    background: rgba(0, 102, 255, 0.12) !important;
+    border: 1px solid var(--primary) !important;
+    box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.15);
+    transition: all 0.2s ease;
+}
+
+/* Columna seleccionada en Kanban */
+.trello-column.selected {
+    background: rgba(0, 102, 255, 0.05);
+    border: 2px solid var(--primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+}
+.trello-column.selected .trello-column-header {
+    background: rgba(0, 102, 255, 0.1);
+}
+
 </style>
 
 </head>
@@ -1493,6 +1511,7 @@ body.dragging-active {
                 this._currentDisplayEvents = null;
                 this._activeDragState = null;
                 this._scrollToToday = false;   // <-- NUEVA LÍNEA
+                this.selectedDate = new Date(); // por defecto, hoy
                 
                 this.init();
             }
@@ -1694,12 +1713,6 @@ body.dragging-active {
                         document.querySelectorAll('[data-planner-view]').forEach(b => b.classList.remove('active'));
                         btn.classList.add('active');
                         const newView = btn.dataset.plannerView;
-                        
-                        if (newView === 'week' && this.currentPlannerView !== 'week') {
-                            this.currentPlannerDate = new Date();
-                            this._scrollToToday = true; // flag para hacer scroll al hoy
-                        }
-                        
                         this.currentPlannerView = newView;
                         this.renderPlanner();
                     });
@@ -1993,9 +2006,10 @@ body.dragging-active {
                 
                 // SIEMPRE re-renderizar el planificador cuando se navega a él
                 if (viewId === 'planner') {
-                    // Forzar que se muestre la semana actual con el día actual visible
-                    this.currentPlannerDate = new Date();
-                    this._scrollToToday = true;
+                    if (!this.selectedDate) this.selectedDate = new Date();
+                    this.currentPlannerDate = new Date(this.selectedDate);
+                    // No forzamos scroll a hoy, usamos selectedDate
+                    this._scrollToToday = false;
                     this.renderPlanner();
                 } else if (this.viewsDirty[viewId] || viewId === 'dashboard') {
                     this.renderView(viewId);
@@ -2216,35 +2230,51 @@ body.dragging-active {
                 const container = document.getElementById('plannerContainer');
                 if (!container) return;
                 
-                // Guardar posición de scroll horizontal (para Kanban)
                 const scrollLeft = container.scrollLeft;
                 const trelloBoard = container.querySelector('.trello-board');
                 const kanbanScrollLeft = trelloBoard ? trelloBoard.scrollLeft : 0;
                 
-                // Forzar re-renderizado completo
                 container.innerHTML = this.currentPlannerView === 'week' ? this.renderWeekView() : this.renderMonthView();
                 this.updatePeriodLabel();
                 this.attachPlannerEvents();
                 this.viewsDirty.planner = false;
                 
-                // Restaurar posición de scroll
                 if (this.currentPlannerView === 'week') {
                     const newBoard = container.querySelector('.trello-board');
                     if (newBoard) {
                         requestAnimationFrame(() => {
-                            if (!this._scrollToToday) {
-                                newBoard.scrollLeft = kanbanScrollLeft;
-                            } else {
-                                // Si debemos ir al día actual, no restauramos el scroll anterior
+                            // Si hay una fecha seleccionada (selectedDate), centrar y resaltar esa columna
+                            if (this.selectedDate) {
+                                const targetDateStr = getLocalDateString(this.selectedDate);
+                                const targetColumn = newBoard.querySelector(`.trello-column[data-date="${targetDateStr}"]`);
+                                if (targetColumn) {
+                                    // Centrar la columna
+                                    targetColumn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                                    // Resaltar la columna
+                                    document.querySelectorAll('.trello-column').forEach(col => col.classList.remove('selected'));
+                                    targetColumn.classList.add('selected');
+                                } else {
+                                    // La fecha seleccionada no está en la semana actual, restaurar scroll anterior
+                                    newBoard.scrollLeft = kanbanScrollLeft;
+                                }
+                            } else if (this._scrollToToday) {
+                                // Si no hay selección, forzar scroll al día actual
                                 const todayColumn = newBoard.querySelector('.trello-column.today');
                                 if (todayColumn) {
                                     todayColumn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
                                 }
                                 this._scrollToToday = false;
+                            } else {
+                                newBoard.scrollLeft = kanbanScrollLeft;
                             }
                         });
                     }
+                } else if (this.currentPlannerView === 'month') {
+                    // Resaltar la celda seleccionada en la vista mensual
+                    setTimeout(() => this.updateSelectedCell(), 50);
                 }
+                
+                container.scrollLeft = scrollLeft;
             }
             
             renderWeekView() {
@@ -2723,7 +2753,7 @@ body.dragging-active {
                 });
 
                 const startDrag = (e, card, startX, startY) => {
-                    document.body.classList.add('dragging-active');   // ← AÑADIR
+                    document.body.classList.add('dragging-active');
                     if (dragState) return;
                     
                     const rect = card.getBoundingClientRect();
@@ -2894,12 +2924,9 @@ body.dragging-active {
                 // ========== FIN DE KANBAN ==========
 
                 // ========== DRAG & DROP PARA VISTA MENSUAL (CON EFECTO VISUAL) ==========
-                // Limpiar configuraciones anteriores de month-cell
-                // ========== DRAG & DROP PARA VISTA MENSUAL (VERSIÓN ROBUSTA) ==========
                 // Limpiar configuraciones anteriores de month-cell (si se llama de nuevo)
                 const monthCells = document.querySelectorAll('.month-cell');
                 monthCells.forEach(cell => {
-                    // Eliminar todos los listeners clonando para resetear (como ya hacías)
                     const newCell = cell.cloneNode(true);
                     cell.parentNode.replaceChild(newCell, cell);
                 });
@@ -2909,6 +2936,13 @@ body.dragging-active {
                     // Click en celda vacía (sin evento) - Popover normal
                     cell.addEventListener('click', (e) => {
                         if (e.target.closest('.event-preview')) return;
+                        const clickedDate = new Date(cell.dataset.date + 'T12:00:00');
+                        this.selectedDate = clickedDate;
+                        this.currentPlannerDate = clickedDate;
+                        
+                        document.querySelectorAll('.month-cell').forEach(c => c.classList.remove('selected'));
+                        cell.classList.add('selected');
+                        
                         this.showDayPopover(cell.dataset.date, cell);
                     });
 
@@ -2922,7 +2956,7 @@ body.dragging-active {
                         newPreview.style.cursor = 'grab';
 
                         newPreview.addEventListener('dragstart', (e) => {
-                            document.body.classList.add('dragging-active');   // ← AÑADIR
+                            document.body.classList.add('dragging-active');
                             const eventId = newPreview.dataset.eventId;
                             const eventType = newPreview.dataset.eventType;
                             const sourceDate = cell.dataset.date;
@@ -2965,7 +2999,6 @@ body.dragging-active {
                         e.preventDefault();
                         e.dataTransfer.dropEffect = 'move';
 
-                        // Verificar si hay un evento arrastrado desde celda o desde popover (dataTransfer)
                         const hasDragData = e.dataTransfer.types.includes('text/plain');
                         if (hasDragData || (this._draggedEvent && this._draggedEvent.sourceDate !== cell.dataset.date)) {
                             cell.classList.add('drag-over');
@@ -2985,7 +3018,6 @@ body.dragging-active {
                         e.preventDefault();
                         cell.classList.remove('drag-over', 'drag-over-active', 'drag-over-external');
 
-                        // 1) Intento obtener datos desde popover (drag & drop nativo)
                         let dragData = null;
                         const rawData = e.dataTransfer.getData('text/plain');
                         if (rawData) {
@@ -2993,7 +3025,6 @@ body.dragging-active {
                         }
 
                         if (dragData && dragData.id) {
-                            // ORIGEN: POPOVER (arrastre desde popover normal o desde modo movimiento? - pero el modo movimiento no tiene drag externo)
                             const targetDate = cell.dataset.date;
                             const sourceDate = dragData.sourceDate;
                             const eventId = dragData.id;
@@ -3005,7 +3036,7 @@ body.dragging-active {
                                 return;
                             }
 
-                            this.closeDayPopover(); // cerrar popover de origen
+                            this.closeDayPopover();
 
                             ConfirmDialog.show(
                                 `¿Mover "${eventTitle}" del día ${this.formatDate(sourceDate)} al ${this.formatDate(targetDate)}?`,
@@ -3036,7 +3067,6 @@ body.dragging-active {
                             return;
                         }
 
-                        // 2) Origen desde CELDA (_draggedEvent)
                         if (!this._draggedEvent) return;
                         const targetDate = cell.dataset.date;
                         const sourceDate = this._draggedEvent.sourceDate;
@@ -3058,11 +3088,10 @@ body.dragging-active {
                             eventTitle = obj?.title || 'Objetivo';
                         }
 
-                        const targetCell = cell; // para usar en callback
+                        const targetCell = cell;
                         ConfirmDialog.show(
                             `¿Mover "${eventTitle}" del día ${this.formatDate(sourceDate)} al ${this.formatDate(targetDate)}?`,
                             () => {
-                                // Efecto visual éxito
                                 targetCell.style.transition = 'background 0.3s ease';
                                 targetCell.style.backgroundColor = 'rgba(16,185,129,0.2)';
                                 setTimeout(() => targetCell.style.backgroundColor = '', 500);
@@ -3100,6 +3129,7 @@ body.dragging-active {
                         this._draggedEvent = null;
                     });
                 });
+
                 // ========== DELEGACIÓN PARA COMPLETAR TAREAS DESDE KANBAN ==========
                 const trelloBoard = document.querySelector('.trello-board');
                 if (trelloBoard) {
@@ -3119,7 +3149,34 @@ body.dragging-active {
                     };
                     trelloBoard.addEventListener('click', this._kanbanCompleteHandler);
                 }
-           }
+
+                // ========== SELECCIÓN DE DÍA EN VISTA SEMANAL (KANBAN) ==========
+                const trelloBoardForSelection = document.querySelector('.trello-board');
+                if (trelloBoardForSelection) {
+                    if (this._kanbanSelectColumnHandler) {
+                        trelloBoardForSelection.removeEventListener('click', this._kanbanSelectColumnHandler);
+                    }
+                    this._kanbanSelectColumnHandler = (e) => {
+                        const columnHeader = e.target.closest('.trello-column-header');
+                        if (!columnHeader) return;
+                        const column = columnHeader.closest('.trello-column');
+                        if (!column) return;
+                        const dateStr = column.dataset.date;
+                        if (!dateStr) return;
+
+                        // Guardar fecha seleccionada
+                        this.selectedDate = new Date(dateStr + 'T12:00:00');
+                        this.currentPlannerDate = new Date(this.selectedDate);
+
+                        // Resaltar la columna
+                        document.querySelectorAll('.trello-column').forEach(col => col.classList.remove('selected'));
+                        column.classList.add('selected');
+
+                    //    this.showToast(`📅 Día ${this.formatDate(dateStr)} seleccionado`, 'info');
+                    };
+                    trelloBoardForSelection.addEventListener('click', this._kanbanSelectColumnHandler);
+                }
+            }
 
            updateEventInDOM(type, id, oldDate, newDate) {
                 // Buscar el evento en la celda origen y eliminarlo
@@ -3369,14 +3426,37 @@ body.dragging-active {
                 const today = new Date();
                 return date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
             }
-            
-            navigatePeriod(dir) {
-                if (this.currentPlannerView === 'week') this.currentPlannerDate.setDate(this.currentPlannerDate.getDate() + dir * 7);
-                else this.currentPlannerDate.setMonth(this.currentPlannerDate.getMonth() + dir);
-                this.renderPlanner(); // Esto ya está, fuerza actualización
+
+            updateSelectedCell() {
+                if (this.currentView !== 'planner' || this.currentPlannerView !== 'month') return;
+                if (!this.selectedDate) return;
+                
+                const currentDateStr = getLocalDateString(this.selectedDate);
+                const targetCell = document.querySelector(`.month-cell[data-date="${currentDateStr}"]`);
+                document.querySelectorAll('.month-cell').forEach(c => c.classList.remove('selected'));
+                if (targetCell) {
+                    targetCell.classList.add('selected');
+                }
             }
             
-            goToToday() { this.currentPlannerDate = new Date(); this.renderPlanner(); }
+            navigatePeriod(dir) {
+                if (this.currentPlannerView === 'week') {
+                    this.currentPlannerDate.setDate(this.currentPlannerDate.getDate() + dir * 7);
+                    // Limpiar selección de columna al cambiar de semana
+                    document.querySelectorAll('.trello-column').forEach(col => col.classList.remove('selected'));
+                } else {
+                    this.currentPlannerDate.setMonth(this.currentPlannerDate.getMonth() + dir);
+                    document.querySelectorAll('.month-cell').forEach(c => c.classList.remove('selected'));
+                }
+                this.renderPlanner();
+            }
+            
+            goToToday() {
+                this.currentPlannerDate = new Date();
+                this.selectedDate = new Date();
+                this.renderPlanner();
+                // Tras renderizar, la lógica en renderPlanner se encargará de centrar y resaltar
+            }
             
             updatePeriodLabel() {
                 const label = document.getElementById('currentPeriodLabel');
