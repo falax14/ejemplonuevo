@@ -499,6 +499,28 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
     padding: 2px 8px;
 }
 
+/* Clon externo (píldora flotante para arrastre entre celdas) */
+.day-popover-event-drag-clone-external {
+    position: fixed;
+    z-index: 10000;
+    pointer-events: none;
+    transform: rotate(2deg) scale(1.05);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    transition: none;
+    background: var(--primary);
+    color: white;
+    border-radius: 40px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    backdrop-filter: blur(4px);
+    animation: popIn 0.15s ease;
+}
+
 /* Elemento original mientras se arrastra */
 .day-popover-event[draggable="true"]:active {
     cursor: grabbing;
@@ -1512,6 +1534,7 @@ body.dragging-active {
                 this._activeDragState = null;
                 this._scrollToToday = false;   // <-- NUEVA LÍNEA
                 this.selectedDate = new Date(); // por defecto, hoy
+                this._justDragged = false;   // bandera para bloquear clicks tras arrastre
                 
                 this.init();
             }
@@ -2248,13 +2271,9 @@ body.dragging-active {
                                 const targetDateStr = getLocalDateString(this.selectedDate);
                                 const targetColumn = newBoard.querySelector(`.trello-column[data-date="${targetDateStr}"]`);
                                 if (targetColumn) {
-                                    // Centrar la columna
+                                    // Solo centrar la columna; la clase 'selected' ya viene en el HTML
                                     targetColumn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                                    // Resaltar la columna
-                                    document.querySelectorAll('.trello-column').forEach(col => col.classList.remove('selected'));
-                                    targetColumn.classList.add('selected');
                                 } else {
-                                    // La fecha seleccionada no está en la semana actual, restaurar scroll anterior
                                     newBoard.scrollLeft = kanbanScrollLeft;
                                 }
                             } else if (this._scrollToToday) {
@@ -2270,8 +2289,8 @@ body.dragging-active {
                         });
                     }
                 } else if (this.currentPlannerView === 'month') {
-                    // Resaltar la celda seleccionada en la vista mensual
-                    setTimeout(() => this.updateSelectedCell(), 50);
+                    // Resaltar la celda seleccionada en la vista mensual (sin retardo extra)
+                    // requestAnimationFrame(() => this.updateSelectedCell());    // La selección se aplica directamente en renderMonthView()
                 }
                 
                 container.scrollLeft = scrollLeft;
@@ -2286,7 +2305,8 @@ body.dragging-active {
                 monday.setDate(current.getDate() - day + 1);
                 
                 let html = '<div class="trello-board">';
-                
+                const selectedDateStr = this.selectedDate ? getLocalDateString(this.selectedDate) : null;
+
                 for (let i = 0; i < 7; i++) {
                     const date = new Date(monday);
                     date.setDate(monday.getDate() + i);
@@ -2295,7 +2315,7 @@ body.dragging-active {
                     const events = this.getEventsArrayForDate(dateStr);
                     
                     html += `
-                        <div class="trello-column ${isToday ? 'today' : ''}" data-date="${dateStr}">
+                        <div class="trello-column ${isToday ? 'today' : ''} ${dateStr === selectedDateStr ? 'selected' : ''}" data-date="${dateStr}">
                             <div class="trello-column-header">
                                 <div class="day-name">${shortDays[i]}</div>
                                 <div class="day-number">${date.getDate()}</div>
@@ -2533,7 +2553,9 @@ body.dragging-active {
                 
                 const offset = startDay === 0 ? 6 : startDay - 1;
                 for (let i = 0; i < offset; i++) html += '<div class="month-cell" style="opacity: 0.3;"></div>';
+               // for (let i = 0; i < offset; i++) html += '<div style="opacity: 0.3; pointer-events: none;"></div>'; //por si no se quieres que aparezcan las celdas que no tienen dias del mes
                 
+                const selectedDateStr = this.selectedDate ? getLocalDateString(this.selectedDate) : null;
                 for (let d = 1; d <= lastDay.getDate(); d++) {
                     const date = new Date(year, month, d);
                     const dateStr = getLocalDateString(date);
@@ -2541,7 +2563,7 @@ body.dragging-active {
                     const hasEvents = events.length > 0;
                     const isToday = this.isToday(date);
                     html += `
-                        <div class="month-cell ${hasEvents ? 'has-events' : ''}" data-date="${dateStr}" style="${isToday ? 'border: 2px solid var(--primary);' : ''}">
+                        <div class="month-cell ${hasEvents ? 'has-events' : ''} ${dateStr === selectedDateStr ? 'selected' : ''}" data-date="${dateStr}" style="${isToday ? 'border: 2px solid var(--primary);' : ''}">
                             <div style="font-weight: 600; margin-bottom: 4px; flex-shrink: 0;">${d}</div>
                             <div class="month-cell-events">
                                 ${events.map(e => this.createEventPreview(e)).join('')}
@@ -2933,64 +2955,253 @@ body.dragging-active {
 
                 // Ahora configuramos los nuevos month-cell con un solo conjunto de eventos
                 document.querySelectorAll('.month-cell').forEach(cell => {
-                    // Click en celda vacía (sin evento) - Popover normal
+                    // Click en celda (para seleccionar día y mostrar popover)
                     cell.addEventListener('click', (e) => {
+                        if (this._justDragged) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            this._justDragged = false; // Reiniciar inmediatamente
+                            return;
+                        }
                         if (e.target.closest('.event-preview')) return;
-                        const clickedDate = new Date(cell.dataset.date + 'T12:00:00');
+
+                        const dateStr = cell.dataset.date;
+                        // Si no tiene fecha (celda de relleno), no hacer nada
+                        if (!dateStr) return;
+
+                        const clickedDate = new Date(dateStr + 'T12:00:00');
+                        // Validar que la fecha pertenezca al mes actual
+                        const currentMonth = this.currentPlannerDate.getMonth();
+                        const currentYear = this.currentPlannerDate.getFullYear();
+                        if (clickedDate.getMonth() !== currentMonth || clickedDate.getFullYear() !== currentYear) {
+                            return;
+                        }
+
                         this.selectedDate = clickedDate;
                         this.currentPlannerDate = clickedDate;
-                        
+
                         document.querySelectorAll('.month-cell').forEach(c => c.classList.remove('selected'));
                         cell.classList.add('selected');
-                        
+
                         this.showDayPopover(cell.dataset.date, cell);
                     });
 
                     // Configurar eventos draggable en los previews de eventos
                     const eventPreviews = cell.querySelectorAll('.event-preview');
+                    // Configurar arrastre personalizado (píldora flotante) en cada preview
                     eventPreviews.forEach(preview => {
                         const newPreview = preview.cloneNode(true);
                         preview.parentNode.replaceChild(newPreview, preview);
 
-                        newPreview.setAttribute('draggable', 'true');
+                        // Deshabilitamos el arrastre nativo completamente
+                        newPreview.setAttribute('draggable', 'false');
                         newPreview.style.cursor = 'grab';
 
-                        newPreview.addEventListener('dragstart', (e) => {
+                        let dragState = {
+                            isDragging: false,
+                            element: null,
+                            clone: null,
+                            startX: 0,
+                            startY: 0,
+                            offsetX: 0,
+                            offsetY: 0,
+                            sourceCell: null,
+                            sourceDate: null,
+                            eventData: null,
+                            rafId: null
+                        };
+
+                        const mousedownHandler = (e) => {
+                            // Ignorar clics en botones (por si acaso)
+                            if (e.target.closest('button')) return;
+                            e.preventDefault();
                             document.body.classList.add('dragging-active');
+
+                            const rect = newPreview.getBoundingClientRect();
+                            const sourceCell = newPreview.closest('.month-cell');
+                            const sourceDate = sourceCell?.dataset.date;
+                            if (!sourceDate) return;
+
+                            // Obtener datos del evento
                             const eventId = newPreview.dataset.eventId;
                             const eventType = newPreview.dataset.eventType;
-                            const sourceDate = cell.dataset.date;
-                            if (!eventId || !eventType) {
-                                e.preventDefault();
-                                return false;
-                            }
-                            e.dataTransfer.setData('text/plain', JSON.stringify({
-                                id: eventId,
-                                type: eventType,
-                                sourceDate: sourceDate
-                            }));
-                            e.dataTransfer.effectAllowed = 'move';
-                            newPreview.style.cursor = 'grabbing';
-                            newPreview.style.opacity = '0.5';
+                            let eventTitle = newPreview.textContent.trim().replace(/^[📝📚🎯]\s*/, '');
+                            if (eventTitle.length > 30) eventTitle = eventTitle.substring(0, 27) + '...';
 
-                            this._draggedEvent = {
-                                id: eventId,
-                                type: eventType,
-                                sourceDate: sourceDate,
-                                element: newPreview
+                            dragState.element = newPreview;
+                            dragState.sourceCell = sourceCell;
+                            dragState.sourceDate = sourceDate;
+                            dragState.eventData = { id: eventId, type: eventType, title: eventTitle, sourceDate };
+                            dragState.startX = e.clientX;
+                            dragState.startY = e.clientY;
+                            dragState.offsetX = e.clientX - rect.left;
+                            dragState.offsetY = e.clientY - rect.top;
+                            dragState.isDragging = false;
+
+                            const dragTimer = setTimeout(() => {
+                                dragState.isDragging = true;
+                                newPreview.style.opacity = '0.4';
+
+                                // Crear píldora flotante (igual que la del popover)
+                                dragState.clone = document.createElement('div');
+                                dragState.clone.className = 'day-popover-event-drag-clone-external';
+                                dragState.clone.innerHTML = `
+                                    <div style="display:flex;align-items:center;gap:8px;">
+                                        <i class="fas fa-arrows-alt" style="font-size:12px;"></i>
+                                        <span style="font-weight:500;">${this.escapeHtml(eventTitle)}</span>
+                                    </div>
+                                `;
+                                dragState.clone.style.top = `${e.clientY - dragState.offsetY}px`;
+                                dragState.clone.style.left = `${e.clientX - dragState.offsetX}px`;
+                                document.body.appendChild(dragState.clone);
+
+                                document.body.style.cursor = 'grabbing';
+                                document.body.style.userSelect = 'none';
+                            }, 150);
+
+                            const mouseMoveHandler = (moveEvent) => {
+                                if (!dragState.isDragging) {
+                                    // Si se mueve más de 5px, forzamos inicio inmediato
+                                    const dx = Math.abs(moveEvent.clientX - dragState.startX);
+                                    const dy = Math.abs(moveEvent.clientY - dragState.startY);
+                                    if (dx > 5 || dy > 5) {
+                                        clearTimeout(dragTimer);
+                                        dragState.isDragging = true;
+                                        newPreview.style.opacity = '0.4';
+                                        dragState.clone = document.createElement('div');
+                                        dragState.clone.className = 'day-popover-event-drag-clone-external';
+                                        dragState.clone.innerHTML = `
+                                            <div style="display:flex;align-items:center;gap:8px;">
+                                                <i class="fas fa-arrows-alt" style="font-size:12px;"></i>
+                                                <span style="font-weight:500;">${this.escapeHtml(eventTitle)}</span>
+                                            </div>
+                                        `;
+                                        document.body.appendChild(dragState.clone);
+                                        document.body.style.cursor = 'grabbing';
+                                        document.body.style.userSelect = 'none';
+                                    }
+                                    return;
+                                }
+
+                                if (dragState.rafId) cancelAnimationFrame(dragState.rafId);
+                                dragState.rafId = requestAnimationFrame(() => {
+                                    if (dragState.clone) {
+                                        dragState.clone.style.left = `${moveEvent.clientX - dragState.offsetX}px`;
+                                        dragState.clone.style.top = `${moveEvent.clientY - dragState.offsetY}px`;
+                                    }
+
+                                    // Detectar celda destino
+                                    const elemBelow = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+                                    const targetCell = elemBelow?.closest('.month-cell');
+                                    document.querySelectorAll('.month-cell').forEach(c => c.classList.remove('drag-over-external'));
+                                    if (targetCell) {
+                                        // Solo resaltamos si la celda es distinta (para no confundir al usuario)
+                                        if (targetCell.dataset.date !== dragState.sourceDate) {
+                                            targetCell.classList.add('drag-over-external');
+                                        }
+                                        dragState.targetCell = targetCell; // Guardamos siempre la celda
+                                    } else {
+                                        dragState.targetCell = null;
+                                    }
+                                });
                             };
-                        });
 
-                        newPreview.addEventListener('dragend', (e) => {
-                            if (document.body.classList.contains('dragging-active')) {
-                                document.body.classList.remove('dragging-active');
+                            const mouseUpHandler = () => {
+                                this._justDragged = true;
+                                setTimeout(() => { this._justDragged = false; }, 0);
+                                if (document.body.classList.contains('dragging-active')) {
+                                    document.body.classList.remove('dragging-active');
+                                }
+                                clearTimeout(dragTimer);
+                                document.removeEventListener('mousemove', mouseMoveHandler);
+                                document.removeEventListener('mouseup', mouseUpHandler);
+
+                                // Limpiar resaltes
+                                document.querySelectorAll('.month-cell').forEach(c => c.classList.remove('drag-over-external'));
+
+                                if (dragState.isDragging && dragState.targetCell && dragState.eventData) {
+                                    const targetDate = dragState.targetCell.dataset.date;
+                                    // Validación de mes (igual que en el popover)
+                                    if (targetDate) {
+                                        const targetDateObj = new Date(targetDate + 'T12:00:00');
+                                        const currentMonth = this.currentPlannerDate.getMonth();
+                                        const currentYear = this.currentPlannerDate.getFullYear();
+                                        if (targetDateObj.getMonth() !== currentMonth || targetDateObj.getFullYear() !== currentYear) {
+                                            this.showToast('No puedes mover eventos a otro mes', 'error');
+                                        } else if (targetDate === dragState.sourceDate) {
+                                            this.showToast('No puedes mover un evento al mismo día', 'info');
+                                        } else {
+                                            const { id, type, title } = dragState.eventData;
+                                            ConfirmDialog.show(
+                                                `¿Mover "${title}" del día ${this.formatDate(dragState.sourceDate)} al ${this.formatDate(targetDate)}?`,
+                                                () => {
+                                                    if (type === 'task') {
+                                                        const task = this.getTaskById(id);
+                                                        if (task) task.dueDate = targetDate;
+                                                    } else if (type === 'exam') {
+                                                        const exam = this.getExamById(id);
+                                                        if (exam) exam.date = targetDate;
+                                                    } else if (type === 'objective') {
+                                                        const obj = this.data.objectives.find(o => o.id === id);
+                                                        if (obj) obj.deadline = targetDate;
+                                                    }
+                                                    this.buildIndexes();
+                                                    this.saveData();
+                                                    this.renderPlanner();
+                                                    this.showToast(`✅ "${title}" movido al ${this.formatDate(targetDate)}`, 'success');
+                                                    // Opcional: abrir popover de modo movimiento
+                                                    setTimeout(() => {
+                                                        const updatedCell = document.querySelector(`.month-cell[data-date="${targetDate}"]`);
+                                                        if (updatedCell) {
+                                                            this.showMoveModePopover(targetDate, updatedCell, id, type, title);
+                                                        }
+                                                    }, 200);
+                                                },
+                                                () => this.showToast('Movimiento cancelado', 'info')
+                                            );
+                                        }
+                                    }else {
+                                    // Celda sin fecha (relleno)
+                                    this.showToast('No puedes mover eventos a una fecha del mes inválida', 'error');
+                                    // Ya se restaurará el estado después de este bloque
+                                    }
+                                }
+
+                                // Restaurar estado original
+                                newPreview.style.opacity = '';
+                                if (dragState.clone) dragState.clone.remove();
+                                document.body.style.cursor = '';
+                                document.body.style.userSelect = '';
+
+                                if (dragState.rafId) cancelAnimationFrame(dragState.rafId);
+                                // Resetear el estado para evitar fugas
+                                dragState = {
+                                    isDragging: false,
+                                    element: null,
+                                    clone: null,
+                                    startX: 0, startY: 0,
+                                    offsetX: 0, offsetY: 0,
+                                    sourceCell: null,
+                                    sourceDate: null,
+                                    eventData: null,
+                                    rafId: null
+                                };
+                            };
+
+                            // Asignar los listeners al documento
+                            document.addEventListener('mousemove', mouseMoveHandler);
+                            document.addEventListener('mouseup', mouseUpHandler);
+                        };
+
+                        // Asignar el evento mousedown al preview
+                        newPreview.addEventListener('mousedown', mousedownHandler);
+                        // Prevenir cualquier arrastre nativo residual
+                        newPreview.addEventListener('dragstart', (e) => e.preventDefault());
+                        newPreview.addEventListener('click', (e) => {
+                            if (this._justDragged) {
+                                e.stopPropagation();
+                                e.preventDefault();
                             }
-                            newPreview.style.cursor = 'grab';
-                            newPreview.style.opacity = '';
-                            document.querySelectorAll('.month-cell').forEach(c => {
-                                c.classList.remove('drag-over', 'drag-over-active', 'drag-over-external');
-                            });
-                            this._draggedEvent = null;
                         });
                     });
 
@@ -3018,14 +3229,47 @@ body.dragging-active {
                         e.preventDefault();
                         cell.classList.remove('drag-over', 'drag-over-active', 'drag-over-external');
 
+                        // ----- Variable unificada -----
+                        const targetDate = cell.dataset.date;
+
+                        // ----- Validación de mes actual (solo si la celda tiene fecha) -----
+                        if (targetDate) {
+                            const targetDateObj = new Date(targetDate + 'T12:00:00');
+                            const currentMonth = this.currentPlannerDate.getMonth();
+                            const currentYear = this.currentPlannerDate.getFullYear();
+                            if (targetDateObj.getMonth() !== currentMonth || targetDateObj.getFullYear() !== currentYear) {
+                                // Limpiar arrastre visual si había uno
+                                if (this._draggedEvent) {
+                                    if (this._draggedEvent.element) {
+                                        this._draggedEvent.element.style.opacity = '';
+                                        this._draggedEvent.element.style.transform = '';
+                                    }
+                                    this._draggedEvent = null;
+                                }
+                                this.showToast('No puedes mover eventos a otro mes', 'error');
+                                return;
+                            }
+                        } else {
+                            // Si no tiene fecha (celda de relleno), cancelar
+                            if (this._draggedEvent) {
+                                if (this._draggedEvent.element) {
+                                    this._draggedEvent.element.style.opacity = '';
+                                    this._draggedEvent.element.style.transform = '';
+                                }
+                                this._draggedEvent = null;
+                            }
+                            return;
+                        }
+
                         let dragData = null;
                         const rawData = e.dataTransfer.getData('text/plain');
                         if (rawData) {
                             try { dragData = JSON.parse(rawData); } catch (err) { /* ignorar */ }
                         }
 
+                        // ----- Rama para dragData (arrastre con dataTransfer) -----
                         if (dragData && dragData.id) {
-                            const targetDate = cell.dataset.date;
+                            // Ahora targetDate ya está definido arriba, no se redeclara
                             const sourceDate = dragData.sourceDate;
                             const eventId = dragData.id;
                             const eventType = dragData.type;
@@ -3067,8 +3311,9 @@ body.dragging-active {
                             return;
                         }
 
+                        // ----- Rama para this._draggedEvent (arrastre interno) -----
                         if (!this._draggedEvent) return;
-                        const targetDate = cell.dataset.date;
+
                         const sourceDate = this._draggedEvent.sourceDate;
                         if (sourceDate === targetDate) {
                             this.showToast('No puedes mover un evento al mismo día', 'info');
@@ -5872,9 +6117,12 @@ body.dragging-active {
                                     const elemBelow = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
                                     const targetCell = elemBelow?.closest('.month-cell');
                                     document.querySelectorAll('.month-cell').forEach(cell => cell.classList.remove('drag-over-external'));
-                                    if (targetCell && targetCell.dataset.date !== dateStr) {
-                                        targetCell.classList.add('drag-over-external');
-                                        dragState.targetCell = targetCell;
+                                    if (targetCell) {
+                                        // Solo resaltar si es diferente
+                                        if (targetCell.dataset.date !== dateStr) {
+                                            targetCell.classList.add('drag-over-external');
+                                        }
+                                        dragState.targetCell = targetCell;   // Guardamos siempre, aunque sea la misma
                                     } else {
                                         dragState.targetCell = null;
                                     }
@@ -5897,6 +6145,9 @@ body.dragging-active {
                         };
 
                         const mouseUpHandler = () => {
+                            // Bloquear el click posterior para que no abra el popover del día
+                            this._justDragged = true;
+                            setTimeout(() => { this._justDragged = false; }, 0);
                             if (document.body.classList.contains('dragging-active')) {
                                 document.body.classList.remove('dragging-active');
                             }
@@ -5904,17 +6155,75 @@ body.dragging-active {
                             document.removeEventListener('mousemove', mouseMoveHandler);
                             document.removeEventListener('mouseup', mouseUpHandler);
 
-                            // Restaurar popover/overlay solo si aún existen en el DOM
-                            if (popover && popover.parentNode && popover.style.display === 'none') {
-                                popover.style.display = '';
-                                const currentOverlay = document.getElementById('dayPopoverOverlay');
-                                if (currentOverlay) currentOverlay.style.display = '';
-                            }
-
                             if (dragState.isDragging) {
                                 if (dragState.isExternal) {
                                     if (dragState.targetCell && dragState.dragData) {
                                         const targetDate = dragState.targetCell.dataset.date;
+                                        // ----- NUEVA VALIDACIÓN: solo permitir soltar en celdas del mes actual -----
+                                        if (targetDate) {
+                                            const targetDateObj = new Date(targetDate + 'T12:00:00');
+                                            const currentMonth = this.currentPlannerDate.getMonth();
+                                            const currentYear = this.currentPlannerDate.getFullYear();
+                                            if (targetDateObj.getMonth() !== currentMonth || targetDateObj.getFullYear() !== currentYear) {
+                                                // Cancelar: restaurar elemento, limpiar arrastre y notificar
+                                                if (dragState.element) {
+                                                    dragState.element.style.display = '';
+                                                    dragState.element.style.opacity = '';
+                                                }
+                                                // Limpiar el clon y las clases visuales
+                                                if (dragState.clone) dragState.clone.remove();
+                                                document.querySelectorAll('.month-cell').forEach(cell => cell.classList.remove('drag-over-external'));
+                                                document.body.style.cursor = '';
+                                                document.body.style.userSelect = '';
+                                                this.showToast('No puedes mover eventos a otro mes', 'error');
+                                                this.closeDayPopover(); // <--- AÑADIR
+                                                // Limpiar referencias del estado antes de salir
+                                                Object.assign(dragState, {
+                                                    isDragging: false,
+                                                    element: null,
+                                                    clone: null,
+                                                    placeholder: null,
+                                                    startY: 0,
+                                                    offsetY: 0,
+                                                    startX: 0,
+                                                    startScrollTop: 0,
+                                                    rafId: null,
+                                                    isExternal: false,
+                                                    targetCell: null,
+                                                    dragData: null
+                                                });
+                                                return;
+                                            }
+                                        } else {
+                                            // Celda sin fecha (de relleno): restaurar y limpiar
+                                            if (dragState.element) {
+                                                dragState.element.style.display = '';
+                                                dragState.element.style.opacity = '';
+                                            }
+                                            if (dragState.clone) dragState.clone.remove();
+                                            document.querySelectorAll('.month-cell').forEach(cell => cell.classList.remove('drag-over-external'));
+                                            document.body.style.cursor = '';
+                                            document.body.style.userSelect = '';
+                                            this.showToast('No puedes mover eventos a una fecha del mes invalida', 'error');
+                                            this.closeDayPopover(); // <--- AÑADIR
+                                            // Limpiar referencias
+                                            Object.assign(dragState, {
+                                                isDragging: false,
+                                                element: null,
+                                                clone: null,
+                                                placeholder: null,
+                                                startY: 0,
+                                                offsetY: 0,
+                                                startX: 0,
+                                                startScrollTop: 0,
+                                                rafId: null,
+                                                isExternal: false,
+                                                targetCell: null,
+                                                dragData: null
+                                            });
+                                            return;
+                                        }
+                                        // ----------------------------------------------------------------
                                         const sourceDate = dateStr;
                                         const { id, type, title } = dragState.dragData;
                                         if (sourceDate !== targetDate) {
@@ -5944,7 +6253,10 @@ body.dragging-active {
                                                 () => this.showToast('Movimiento cancelado', 'info')
                                             );
                                         } else {
+                                            // Cerrar el popover en lugar de restaurarlo
+                                            this.closeDayPopover();
                                             this.showToast('No puedes mover un evento al mismo día', 'info');
+                                            // Asegurarse de que el elemento original quede visible
                                             if (dragState.element) {
                                                 dragState.element.style.display = '';
                                                 dragState.element.style.opacity = '';
@@ -6179,6 +6491,9 @@ body.dragging-active {
                     };
                     
                     const mouseUpHandler = () => {
+                        // Bloquear el click posterior para que no abra el popover del día
+                        this._justDragged = true;
+                        setTimeout(() => { this._justDragged = false; }, 0);
                         if (document.body.classList.contains('dragging-active')) {
                             document.body.classList.remove('dragging-active');
                         }
