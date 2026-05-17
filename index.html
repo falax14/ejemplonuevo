@@ -891,6 +891,126 @@ body.dragging-active {
     width: 130px;
 }
 
+/* ===== HORARIOS ===== */
+.schedule-grid {
+    display: grid;
+    grid-template-columns: 60px repeat(5, 1fr);
+    gap: 2px;
+    min-width: 800px;
+    height: 100%;
+    min-height: 500px;
+}
+
+.schedule-time-col {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    padding: 4px;
+}
+
+.schedule-time-slot-label {
+    height: 40px;
+    line-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+    box-sizing: border-box;
+}
+
+.schedule-day-col {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    position: relative;
+    min-height: 100%;
+}
+
+.schedule-day-header {
+    text-align: center;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 0 4px;
+    height: 40px;
+    line-height: 40px;
+    border-bottom: 1px solid var(--border-light);
+    color: var(--text-secondary);
+    font-family: 'Manrope', sans-serif;
+    background: var(--bg-tertiary);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+/* ===== BLOQUES DE HORARIO ===== */
+.schedule-block {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    padding: 2px 6px;            /* más compacto */
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;      /* centrado vertical */
+    gap: 1px;
+    z-index: 1;
+    border-left: 3px solid rgba(0,0,0,0.2);
+    box-shadow: var(--shadow-sm);
+    min-height: 24px;            /* altura mínima para legibilidad */
+}
+
+.schedule-block:hover {
+    transform: scale(1.02);
+    box-shadow: var(--shadow-md);
+    z-index: 3;
+}
+
+.schedule-block-title {
+    font-weight: 600;
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.schedule-block-meta {
+    font-size: 9px;
+    line-height: 1.2;
+    opacity: 0.85;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    /* Para evitar que se desborde si el bloque es muy pequeño */
+    overflow: hidden;
+}
+
+.schedule-block-time {
+    font-weight: 500;
+}
+
+.schedule-block-classroom {
+    font-style: italic;
+}
+
+/* Bloque muy pequeño: se ocultan los metadatos y se reduce el título */
+.schedule-block-small .schedule-block-meta {
+    display: none;
+}
+
+.schedule-block-small .schedule-block-title {
+    font-size: 10px;
+}
+
 </style>
 
 </head>
@@ -918,7 +1038,10 @@ body.dragging-active {
             <button class="nav-item" data-view="exams">
                 <i class="fas fa-file-alt"></i><span>Exámenes</span>
             </button>
-            
+            <button class="nav-item" data-view="schedule">
+                <i class="fas fa-clock"></i><span>Horarios</span>
+            </button>
+                        
             <div class="nav-divider"><span>Análisis</span></div>
             
             <button class="nav-item" data-view="habits">
@@ -1107,7 +1230,25 @@ body.dragging-active {
                 </div>
             </div>
         </div>
-        
+
+        <!-- Schedule View -->
+        <div id="schedule-view" class="view-panel hidden">
+            <div class="card" style="display: flex; flex-direction: column; height: 100%;">
+                <div class="card-header">
+                    <h3 class="card-title">Horario Semanal</h3>
+                    <button class="btn-primary" id="addScheduleBtn">
+                        <i class="fas fa-plus"></i> Añadir Bloque
+                    </button>
+                </div>
+                <!-- Barra de filtros avanzada -->
+                <div class="filter-bar" id="scheduleFilterBarContainer"></div>
+                <!-- Cuadrícula semanal -->
+                <div style="flex: 1; overflow: auto; min-height: 0;">
+                    <div id="scheduleGrid"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Habits View (Bitácora) con Rachas Mejoradas -->
         <div id="habits-view" class="view-panel hidden">
             <div class="card">
@@ -1394,6 +1535,64 @@ body.dragging-active {
             </form>
         </div>
     </div>
+
+    <!-- Modal de Horario -->
+    <div class="modal-overlay" id="scheduleModal">
+        <div class="modal" style="width: 520px;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="scheduleModalTitle">Nuevo Bloque Horario</h2>
+                <button class="modal-close" onclick="app.closeModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="scheduleForm">
+                <input type="hidden" id="scheduleId">
+                <div class="form-group">
+                    <label class="form-label">Asignatura</label>
+                    <select class="form-select" id="scheduleSubjectSelect" required></select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Día de la semana</label>
+                        <select class="form-select" id="scheduleDaySelect" required>
+                            <option value="1">Lunes</option>
+                            <option value="2">Martes</option>
+                            <option value="3">Miércoles</option>
+                            <option value="4">Jueves</option>
+                            <option value="5">Viernes</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Tipo de clase</label>
+                        <select class="form-select" id="scheduleTypeSelect">
+                            <option value="teoria">Teoría</option>
+                            <option value="practica">Práctica</option>
+                            <option value="laboratorio">Laboratorio</option>
+                            <option value="seminario">Seminario</option>
+                            <option value="examen">Examen</option>
+                            <option value="estudio">Estudio</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Hora inicio</label>
+                        <input type="time" class="form-input" id="scheduleStartTime" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Hora fin</label>
+                        <input type="time" class="form-input" id="scheduleEndTime" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Aula (opcional)</label>
+                    <input type="text" class="form-input" id="scheduleClassroom" placeholder="Ej: Aula 101">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="app.closeModal()">Cancelar</button>
+                    <button type="submit" class="btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
     
     <div class="modal-overlay" id="userModal">
         <div class="modal">
@@ -1533,14 +1732,15 @@ body.dragging-active {
         class StudyOSApp {
             constructor() {
                 this.data = {
-                    tasks: [], subjects: [], exams: [], habits: [], objectives: [],
-                    user: { name: 'María Castro', role: 'Ingeniería Informática', initials: 'MC' }
+                    tasks: [], subjects: [], exams: [], habits: [], objectives: [], schedules: [],
+                    user: { name: 'María Castro', role: 'Ingeniería Informática', initials: 'MC' } 
                 };
                 // Filtros avanzados persistentes
                 this.activeFilters = {
                     tasks: { search: '', status: 'all', priority: 'all', subject: 'all', dateFrom: '', dateTo: '', sort: 'date' },
                     subjects: { search: '', progressMin: '', progressMax: '', sort: 'name' },
-                    exams: { search: '', subject: 'all', status: 'all', dateFrom: '', dateTo: '', weightMin: '', weightMax: '', gradeMin: '', gradeMax: '', sort: 'date' }
+                    exams: { search: '', subject: 'all', status: 'all', dateFrom: '', dateTo: '', weightMin: '', weightMax: '', gradeMin: '', gradeMax: '', sort: 'date' },
+                    schedule: { search: '', subject: 'all', day: 'all', type: 'all', sort: 'time' }
                 };
                 this.progressCache = new Map();
                 this.charts = {};
@@ -1646,7 +1846,7 @@ body.dragging-active {
                         localStorage.setItem('studyos_has_seen_app', 'true');
                     } else {
                         this.data = {
-                            tasks: [], subjects: [], exams: [], habits: [], objectives: [],
+                            tasks: [], subjects: [], exams: [], habits: [], objectives: [], schedules: [],   // ← AÑADIR
                             user: this.data.user || { name: 'María Castro', role: 'Ingeniería Informática', initials: 'MC' }
                         };
                     }
@@ -1684,6 +1884,7 @@ body.dragging-active {
                 if (!this.data.exams) this.data.exams = [];
                 if (!this.data.habits) this.data.habits = [];
                 if (!this.data.objectives) this.data.objectives = [];
+                if (!this.data.schedules) this.data.schedules = [];
                 this.updateAllSubjectsProgress();
                 this.saveData();
             }
@@ -1758,6 +1959,12 @@ body.dragging-active {
                 document.getElementById('examForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveExam(); });
                 document.getElementById('objectiveForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveObjective(); });
                 document.getElementById('userForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveUser(); });
+
+                document.getElementById('scheduleForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.saveSchedule();
+                });
+                document.getElementById('addScheduleBtn')?.addEventListener('click', () => this.openScheduleModal());
                 
                 document.getElementById('saveStudySession')?.addEventListener('click', () => this.saveStudySession());
                 document.getElementById('habitEditForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveEditedHabit(); });
@@ -1927,6 +2134,13 @@ body.dragging-active {
                         else if (id === 'examGradeMax') f.gradeMax = target.value;
                         else if (id === 'examSort') f.sort = target.value;
                         this.renderExams();
+                    } else if (viewType === 'schedule') {
+                        const f = this.activeFilters.schedule;
+                        const id = target.id;
+                        if (id === 'scheduleFilterSubject') f.subject = target.value;
+                        else if (id === 'scheduleFilterDay') f.day = target.value;
+                        else if (id === 'scheduleFilterType') f.type = target.value;
+                        this.renderSchedule();
                     }
                 });
 
@@ -1945,6 +2159,9 @@ body.dragging-active {
                             } else if (viewType === 'exams') {
                                 this.activeFilters.exams.search = target.value;
                                 this.renderExams();
+                            } else if (viewType === 'schedule') {
+                                this.activeFilters.schedule.search = target.value;
+                                this.renderSchedule();
                             }
                         }, 300);
                     }
@@ -1967,6 +2184,11 @@ body.dragging-active {
                         this.insertFilterBar('exams');
                         this.setupFilterListeners('exams');
                         this.renderExams();
+                    } else if (e.target.id === 'clearScheduleFilters') {
+                        this.activeFilters.schedule = { search: '', subject: 'all', day: 'all', type: 'all', sort: 'time' };
+                        this.insertFilterBar('schedule');
+                        this.setupFilterListeners('schedule');
+                        this.renderSchedule();
                     }
                 });
             }
@@ -2142,14 +2364,17 @@ body.dragging-active {
                     i.classList.remove('active');
                     if (i.dataset.view === viewId) i.classList.add('active');
                 });
-                const titles = { dashboard: 'Dashboard', planner: 'Planificador', tasks: 'Gestión de Tareas', subjects: 'Asignaturas', exams: 'Control de Exámenes', habits: 'Bitácora', objectives: 'Objetivos' };
+                const titles = { dashboard: 'Dashboard', planner: 'Planificador', tasks: 'Gestión de Tareas', subjects: 'Asignaturas', exams: 'Control de Exámenes', schedule: 'Horario Semanal', habits: 'Bitácora', objectives: 'Objetivos' };
                 document.getElementById('pageTitle').textContent = titles[viewId] || 'StudyOS';
                 this.currentView = viewId;
                 
                 // Insertar barra de filtros en las vistas que corresponda
-                if (viewId === 'tasks' || viewId === 'subjects' || viewId === 'exams') {
+                if (viewId === 'tasks' || viewId === 'subjects' || viewId === 'exams' || viewId === 'schedule') {
                     this.insertFilterBar(viewId);
                     this.setupFilterListeners(viewId);
+                    if (viewId === 'schedule') {
+                        this.renderSchedule();   // Forzar renderizado inmediato de la cuadrícula
+                    }
                 }
                 
                 if (viewId === 'planner') {
@@ -2170,6 +2395,7 @@ body.dragging-active {
                     case 'tasks': this.renderTasks(); break;
                     case 'subjects': this.renderSubjects(); break;
                     case 'exams': this.renderExams(); break;
+                    case 'schedule': this.renderSchedule(); break;   // ← AÑADIR
                     case 'habits': this.renderHabits(); break;
                     case 'objectives': this.renderObjectives(); break;
                 }
@@ -2177,7 +2403,7 @@ body.dragging-active {
             
             renderAll() {
                 this.renderDashboard();
-                this.viewsDirty = { planner: true, tasks: true, subjects: true, exams: true, habits: true, objectives: true };
+                this.viewsDirty = { planner: true, tasks: true, subjects: true, exams: true, schedule: true, habits: true, objectives: true };
                 this.updateSubjectSelects();
             }
             
@@ -3932,6 +4158,35 @@ body.dragging-active {
                             <button class="btn-secondary" id="clearExamFilters">Limpiar</button>
                         </div>
                     `;
+                } else if (viewType === 'schedule') {
+                    const f = this.activeFilters.schedule;
+                    html = `
+                        <div class="filter-bar-advanced">
+                            <input type="text" class="filter-input" id="scheduleSearch" placeholder="🔍 Buscar..." value="${f.search}">
+                            <select class="filter-select" id="scheduleFilterSubject">
+                                <option value="all">📚 Asignatura</option>
+                                ${subjectOptions}
+                            </select>
+                            <select class="filter-select" id="scheduleFilterDay">
+                                <option value="all">📅 Día</option>
+                                <option value="1">Lunes</option>
+                                <option value="2">Martes</option>
+                                <option value="3">Miércoles</option>
+                                <option value="4">Jueves</option>
+                                <option value="5">Viernes</option>
+                            </select>
+                            <select class="filter-select" id="scheduleFilterType">
+                                <option value="all">🏷️ Tipo</option>
+                                <option value="teoria">Teoría</option>
+                                <option value="practica">Práctica</option>
+                                <option value="laboratorio">Laboratorio</option>
+                                <option value="seminario">Seminario</option>
+                                <option value="examen">Examen</option>
+                                <option value="estudio">Estudio</option>
+                            </select>
+                            <button class="btn-secondary" id="clearScheduleFilters">Limpiar</button>
+                        </div>
+                    `;
                 }
                 return html;
             }
@@ -4296,6 +4551,265 @@ body.dragging-active {
                     this.renderPlanner();            // ← AÑADIR ESTA LÍNEA
                     this.showToast('Examen reabierto', 'success'); 
                 }
+            }
+
+            // ========== HORARIOS ==========
+
+            openScheduleModal(block = null) {
+                this.updateSubjectSelects(); // Para el select de asignaturas
+                const modal = document.getElementById('scheduleModal');
+                const subjectSelect = document.getElementById('scheduleSubjectSelect');
+                
+                // Llenar select de asignaturas
+                if (subjectSelect) {
+                    subjectSelect.innerHTML = this.data.subjects.map(s => 
+                        `<option value="${s.id}">${s.name}</option>`
+                    ).join('');
+                }
+                
+                if (block) {
+                    document.getElementById('scheduleModalTitle').textContent = 'Editar Bloque Horario';
+                    document.getElementById('scheduleId').value = block.id;
+                    document.getElementById('scheduleSubjectSelect').value = block.subjectId;
+                    document.getElementById('scheduleDaySelect').value = block.dayOfWeek;
+                    document.getElementById('scheduleTypeSelect').value = block.type;
+                    document.getElementById('scheduleStartTime').value = block.startTime;
+                    document.getElementById('scheduleEndTime').value = block.endTime;
+                    document.getElementById('scheduleClassroom').value = block.classroom || '';
+                } else {
+                    document.getElementById('scheduleModalTitle').textContent = 'Nuevo Bloque Horario';
+                    document.getElementById('scheduleId').value = '';
+                    document.getElementById('scheduleForm').reset();
+                    if (subjectSelect && this.data.subjects.length > 0) {
+                        subjectSelect.value = this.data.subjects[0].id;
+                    }
+                }
+                modal.classList.add('active');
+            }
+
+            saveSchedule() {
+                const id = document.getElementById('scheduleId').value;
+                const subjectId = document.getElementById('scheduleSubjectSelect').value;
+                const dayOfWeek = parseInt(document.getElementById('scheduleDaySelect').value);
+                const type = document.getElementById('scheduleTypeSelect').value;
+                const startTime = document.getElementById('scheduleStartTime').value;
+                const endTime = document.getElementById('scheduleEndTime').value;
+                const classroom = document.getElementById('scheduleClassroom').value.trim();
+
+                if (!subjectId) { this.showToast('Selecciona una asignatura', 'error'); return; }
+                if (!startTime || !endTime) { this.showToast('Horas requeridas', 'error'); return; }
+                if (startTime >= endTime) { this.showToast('Hora fin debe ser posterior a hora inicio', 'error'); return; }
+
+                const blockData = { subjectId, dayOfWeek, type, startTime, endTime, classroom: classroom || null };
+
+                if (id) {
+                    const idx = this.data.schedules.findIndex(s => s.id === id);
+                    if (idx !== -1) {
+                        this.data.schedules[idx] = { ...this.data.schedules[idx], ...blockData };
+                    }
+                } else {
+                    blockData.id = 'schedule_' + Date.now();
+                    this.data.schedules.push(blockData);
+                }
+
+                this.saveData();  // 🔥 ESTA LÍNEA ES CRÍTICA
+                this.closeModal();
+                this.renderSchedule();
+                this.showToast(id ? 'Bloque actualizado' : 'Bloque creado', 'success');
+            }
+
+            deleteSchedule(id) {
+                this.data.schedules = this.data.schedules.filter(s => s.id !== id);
+                this.saveData();
+                this.renderSchedule();
+                this.showToast('Bloque eliminado', 'success');
+            }
+
+            renderSchedule() {
+                const f = this.activeFilters.schedule;
+                let blocks = [...this.data.schedules];
+                
+                // Filtros
+                if (f.subject !== 'all') blocks = blocks.filter(b => b.subjectId === f.subject);
+                if (f.day !== 'all') blocks = blocks.filter(b => b.dayOfWeek === parseInt(f.day));
+                if (f.type !== 'all') blocks = blocks.filter(b => b.type === f.type);
+                
+                // Búsqueda (por asignatura, aula, tipo)
+                if (f.search) {
+                    const q = this.normalizeString(f.search);
+                    blocks = blocks.filter(b => {
+                        const subject = this.getSubjectById(b.subjectId);
+                        return (subject && this.normalizeString(subject.name).includes(q)) ||
+                            (b.classroom && this.normalizeString(b.classroom).includes(q)) ||
+                            this.normalizeString(b.type).includes(q);
+                    });
+                }
+                
+                // Construir grid
+                const grid = document.getElementById('scheduleGrid');
+                if (!grid) return;
+                
+                const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+                const dayColumns = [1, 2, 3, 4, 5];
+                
+                // Rango horario: 07:00 a 21:00 (en intervalos de 30 min)
+                const startHour = 7, endHour = 21;
+                const slotHeight = 40; // px por cada 30 min
+                const totalSlots = (endHour - startHour) * 2; // intervalos de 30 min
+                
+                let html = '<div class="schedule-grid">';
+                
+                // Columna de horas
+                html += '<div class="schedule-time-col">';
+                html += `<div class="schedule-day-header" style="border-bottom:none; height: 40px; line-height: 40px;">Hora</div>`;
+                for (let h = startHour; h < endHour; h++) {
+                    for (let m = 0; m < 2; m++) {
+                        const hourStr = String(h).padStart(2, '0');
+                        const minStr = m === 0 ? '00' : '30';
+                        html += `<div class="schedule-time-slot-label">${hourStr}:${minStr}</div>`;
+                    }
+                }
+                html += '</div>';
+                
+                // Columnas de días
+                dayColumns.forEach(day => {
+                    html += '<div class="schedule-day-col">';
+                    html += `<div class="schedule-day-header">${days[day-1]}</div>`;
+                    
+                    // Contenedor para posicionar bloques
+                    html += `<div class="schedule-day-body" style="position: relative; height: ${totalSlots * slotHeight}px; margin-top: 0; padding-top: 0;">`;
+                    
+                    const dayBlocks = blocks.filter(b => b.dayOfWeek === day);
+                    dayBlocks.forEach(block => {
+                        const subject = this.getSubjectById(block.subjectId);
+                        const [startH, startM] = block.startTime.split(':').map(Number);
+                        const [endH, endM] = block.endTime.split(':').map(Number);
+                        
+                        const startMinutes = (startH * 60 + startM) - (startHour * 60);
+                        const endMinutes = (endH * 60 + endM) - (startHour * 60);
+                        
+                        if (startMinutes < 0 || endMinutes > totalSlots * 30) return; // fuera de rango
+                        
+                        const top = (startMinutes / 30) * slotHeight + 20;
+                        const height = ((endMinutes - startMinutes) / 30) * slotHeight;
+                        
+                        const bgColor = subject ? subject.color : '#0066FF';
+                        const bgStyle = this.hexToRgba(bgColor, 0.15);
+                        const textColor = bgColor;
+                        
+                        html += `
+                            <div class="schedule-block" 
+                                style="top: ${top}px; height: ${height}px; background: ${bgStyle}; color: ${textColor};"
+                                data-schedule-id="${block.id}"
+                                title="${subject?.name || 'Sin asignatura'} - ${block.startTime} a ${block.endTime}${block.classroom ? ' - ' + block.classroom : ''} - ${this.getTypeLabel(block.type)}">
+                                <div class="schedule-block-title">${subject?.name || 'Sin asignatura'}</div>
+                                <div class="schedule-block-meta">
+                                    <span class="schedule-block-time">${block.startTime} - ${block.endTime}</span>
+                                    ${block.classroom ? `<span class="schedule-block-classroom">📍 ${block.classroom}</span>` : ''}
+                                    <span>${this.getTypeLabel(block.type)}</span>
+                                </div>
+                                <div style="position: absolute; top: 2px; right: 4px; display: flex; gap: 4px;">
+                                    <button class="btn-icon" data-edit-schedule="${block.id}" style="font-size: 10px; padding: 2px 4px;">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn-icon" data-delete-schedule="${block.id}" style="font-size: 10px; padding: 2px 4px;">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                    html += '</div>';
+                });
+                
+                html += '</div>';
+                
+                grid.innerHTML = html;
+                requestAnimationFrame(() => {
+                    this.fixScheduleAlignment();      // si lo usas
+                    this.adjustSmallScheduleBlocks();
+                });
+                this.attachScheduleEvents();
+            }
+
+            adjustSmallScheduleBlocks() {
+                const blocks = document.querySelectorAll('.schedule-block');
+                blocks.forEach(block => {
+                    const height = block.offsetHeight;
+                    if (height < 45) {
+                        block.classList.add('schedule-block-small');
+                    }
+                });
+            }
+
+            fixScheduleAlignment() {
+                const grid = document.getElementById('scheduleGrid');
+                if (!grid) return;
+
+                // Obtener la primera etiqueta horaria (07:00) y el cuerpo del primer día
+                const firstTimeLabel = grid.querySelector('.schedule-time-slot-label');
+                const firstDayBody = grid.querySelector('.schedule-day-body');
+
+                if (!firstTimeLabel || !firstDayBody) return;
+
+                const labelRect = firstTimeLabel.getBoundingClientRect();
+                const bodyRect = firstDayBody.getBoundingClientRect();
+
+                // Diferencia vertical entre el inicio del primer slot horario y el inicio del cuerpo del día
+                const offset = labelRect.top - bodyRect.top;
+
+                if (Math.abs(offset) < 1) return; // no hay desalineación significativa
+
+                // Ajustar todos los bloques sumando (o restando) la diferencia
+                const blocks = grid.querySelectorAll('.schedule-block');
+                blocks.forEach(block => {
+                    const currentTop = parseFloat(block.style.top) || 0;
+                    block.style.top = (currentTop + offset) + 'px';
+                });
+            }
+
+            getTypeLabel(type) {
+                const labels = {
+                    teoria: '📖 Teoría',
+                    practica: '✍️ Práctica',
+                    laboratorio: '🔬 Lab',
+                    seminario: '📊 Seminario',
+                    examen: '📝 Examen',
+                    estudio: '📚 Estudio'
+                };
+                return labels[type] || type;
+            }
+
+            attachScheduleEvents() {
+                // Editar bloque
+                document.querySelectorAll('[data-edit-schedule]').forEach(el => {
+                    el.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const block = this.data.schedules.find(s => s.id === el.dataset.editSchedule);
+                        if (block) this.openScheduleModal(block);
+                    });
+                });
+                
+                // Eliminar bloque
+                document.querySelectorAll('[data-delete-schedule]').forEach(el => {
+                    el.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        ConfirmDialog.show('¿Eliminar este bloque horario?', () => {
+                            this.deleteSchedule(el.dataset.deleteSchedule);
+                        });
+                    });
+                });
+                
+                // Click en bloque para editar
+                document.querySelectorAll('.schedule-block').forEach(block => {
+                    block.addEventListener('click', () => {
+                        const id = block.dataset.scheduleId;
+                        const s = this.data.schedules.find(s => s.id === id);
+                        if (s) this.openScheduleModal(s);
+                    });
+                });
             }
             
             renderHabits() {
@@ -4803,6 +5317,7 @@ body.dragging-active {
                                         exams: [],
                                         habits: [],
                                         objectives: [],
+                                        schedules: [],      // <-- añadido
                                         user: savedUser
                                     };
                                     
