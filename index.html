@@ -853,6 +853,44 @@ body.dragging-active {
     background: rgba(0, 102, 255, 0.1);
 }
 
+/* ===== BARRA DE FILTROS AVANZADA ===== */
+.filter-bar-advanced {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    padding: 16px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    margin-bottom: 16px;
+}
+
+.filter-input {
+    padding: 10px 16px;
+    border-radius: 40px;
+    border: 1px solid var(--border-light);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 14px;
+    min-width: 180px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.filter-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0,102,255,0.1);
+}
+
+.date-range, .range-inputs, .range-slider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.range-inputs input, .date-range input {
+    width: 130px;
+}
+
 </style>
 
 </head>
@@ -1009,23 +1047,12 @@ body.dragging-active {
             <div class="card">
                 <div class="card-header">
                     <h3 class="card-title">Gestión de Tareas</h3>
-                    <div class="filter-bar">
-                        <!-- Reemplazar por: -->
-                        <select class="filter-select" id="taskFilterStatus">
-                            <option value="all">Todas</option>
-                            <option value="pendiente">Pendientes</option>
-                            <option value="en progreso">En Progreso</option>
-                            <option value="vencida">Vencidas 🔴</option>
-                            <option value="completada">Completadas</option>
-                        </select>
-                        <select class="filter-select" id="taskFilterSubject">
-                            <option value="all">Todas las asignaturas</option>
-                        </select>
-                        <button class="btn-primary" id="addTaskBtn">
-                            <i class="fas fa-plus"></i> Nueva Tarea
-                        </button>
-                    </div>
+                    <button class="btn-primary" id="addTaskBtn">
+                        <i class="fas fa-plus"></i> Nueva Tarea
+                    </button>
                 </div>
+                <!-- Barra de filtros avanzada (se genera dinámicamente) -->
+                <div class="filter-bar" id="tasksFilterBarContainer"></div>
 
                 <h4 class="section-title" style="color: var(--danger);">🔴 Tareas Vencidas</h4>
                 <div class="task-list" id="overdueTasksList"></div>
@@ -1047,6 +1074,9 @@ body.dragging-active {
                         <i class="fas fa-plus"></i> Nueva Asignatura
                     </button>
                 </div>
+                <!-- NUEVO: barra de filtros avanzada -->
+                <div class="filter-bar" id="subjectsFilterBarContainer"></div>
+
                 <div class="subject-list" id="subjectsList"></div>
                 <div style="margin-top: 32px;">
                     <canvas id="subjectsProgressChart" style="max-height: 250px;"></canvas>
@@ -1063,7 +1093,9 @@ body.dragging-active {
                         <i class="fas fa-plus"></i> Nuevo Examen
                     </button>
                 </div>
-                
+                <!-- NUEVO: barra de filtros avanzada -->
+                <div class="filter-bar" id="examsFilterBarContainer"></div>
+
                 <h4 class="section-title">📅 Próximos Exámenes</h4>
                 <div class="exam-timeline" id="activeExamsList"></div>
                 
@@ -1504,6 +1536,12 @@ body.dragging-active {
                     tasks: [], subjects: [], exams: [], habits: [], objectives: [],
                     user: { name: 'María Castro', role: 'Ingeniería Informática', initials: 'MC' }
                 };
+                // Filtros avanzados persistentes
+                this.activeFilters = {
+                    tasks: { search: '', status: 'all', priority: 'all', subject: 'all', dateFrom: '', dateTo: '', sort: 'date' },
+                    subjects: { search: '', progressMin: '', progressMax: '', sort: 'name' },
+                    exams: { search: '', subject: 'all', status: 'all', dateFrom: '', dateTo: '', weightMin: '', weightMax: '', gradeMin: '', gradeMax: '', sort: 'date' }
+                };
                 this.progressCache = new Map();
                 this.charts = {};
                 this.currentView = 'dashboard';
@@ -1721,9 +1759,6 @@ body.dragging-active {
                 document.getElementById('objectiveForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveObjective(); });
                 document.getElementById('userForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveUser(); });
                 
-                document.getElementById('taskFilterStatus')?.addEventListener('change', () => { this.viewsDirty.tasks = true; this.renderTasks(); });
-                document.getElementById('taskFilterSubject')?.addEventListener('change', () => { this.viewsDirty.tasks = true; this.renderTasks(); });
-                
                 document.getElementById('saveStudySession')?.addEventListener('click', () => this.saveStudySession());
                 document.getElementById('habitEditForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveEditedHabit(); });
                 
@@ -1849,6 +1884,89 @@ body.dragging-active {
                         document.getElementById('taskRecurrenceSelect').value = 'none';
                         if (recurrenceConfig) recurrenceConfig.style.display = 'none';
                         document.getElementById('recurrenceInterval').value = 1;
+                    }
+                });
+            }
+
+            setupFilterListeners(viewType) {
+                const container = document.getElementById(`${viewType}FilterBarContainer`);
+                if (!container) return;
+
+                // Eliminar listeners previos clonando (opcional, pero seguro)
+                const newContainer = container.cloneNode(true);
+                container.parentNode.replaceChild(newContainer, container);
+
+                newContainer.addEventListener('change', (e) => {
+                    const target = e.target;
+                    if (viewType === 'tasks') {
+                        const f = this.activeFilters.tasks;
+                        const id = target.id;
+                        if (id === 'taskFilterStatus') f.status = target.value;
+                        else if (id === 'taskFilterPriority') f.priority = target.value;
+                        else if (id === 'taskFilterSubject') f.subject = target.value;
+                        else if (id === 'taskDateFrom') f.dateFrom = target.value;
+                        else if (id === 'taskDateTo') f.dateTo = target.value;
+                        else if (id === 'taskSort') f.sort = target.value;
+                        this.renderTasks();
+                    } else if (viewType === 'subjects') {
+                        const f = this.activeFilters.subjects;
+                        if (target.id === 'subjectProgressMin') f.progressMin = target.value;
+                        else if (target.id === 'subjectProgressMax') f.progressMax = target.value;
+                        else if (target.id === 'subjectSort') f.sort = target.value;
+                        this.renderSubjects();
+                    } else if (viewType === 'exams') {
+                        const f = this.activeFilters.exams;
+                        const id = target.id;
+                        if (id === 'examFilterSubject') f.subject = target.value;
+                        else if (id === 'examFilterStatus') f.status = target.value;
+                        else if (id === 'examDateFrom') f.dateFrom = target.value;
+                        else if (id === 'examDateTo') f.dateTo = target.value;
+                        else if (id === 'examWeightMin') f.weightMin = target.value;
+                        else if (id === 'examWeightMax') f.weightMax = target.value;
+                        else if (id === 'examGradeMin') f.gradeMin = target.value;
+                        else if (id === 'examGradeMax') f.gradeMax = target.value;
+                        else if (id === 'examSort') f.sort = target.value;
+                        this.renderExams();
+                    }
+                });
+
+                // Búsqueda con debounce
+                newContainer.addEventListener('input', (e) => {
+                    const target = e.target;
+                    if (target.matches('#taskSearch, #subjectSearch, #examSearch')) {
+                        clearTimeout(this._searchTimeout);
+                        this._searchTimeout = setTimeout(() => {
+                            if (viewType === 'tasks') {
+                                this.activeFilters.tasks.search = target.value;
+                                this.renderTasks();
+                            } else if (viewType === 'subjects') {
+                                this.activeFilters.subjects.search = target.value;
+                                this.renderSubjects();
+                            } else if (viewType === 'exams') {
+                                this.activeFilters.exams.search = target.value;
+                                this.renderExams();
+                            }
+                        }, 300);
+                    }
+                });
+
+                // Botones de limpiar
+                newContainer.addEventListener('click', (e) => {
+                    if (e.target.id === 'clearTaskFilters') {
+                        this.activeFilters.tasks = { search: '', status: 'all', priority: 'all', subject: 'all', dateFrom: '', dateTo: '', sort: 'date' };
+                        this.insertFilterBar('tasks');
+                        this.setupFilterListeners('tasks');
+                        this.renderTasks();
+                    } else if (e.target.id === 'clearSubjectFilters') {
+                        this.activeFilters.subjects = { search: '', progressMin: '', progressMax: '', sort: 'name' };
+                        this.insertFilterBar('subjects');
+                        this.setupFilterListeners('subjects');
+                        this.renderSubjects();
+                    } else if (e.target.id === 'clearExamFilters') {
+                        this.activeFilters.exams = { search: '', subject: 'all', status: 'all', dateFrom: '', dateTo: '', weightMin: '', weightMax: '', gradeMin: '', gradeMax: '', sort: 'date' };
+                        this.insertFilterBar('exams');
+                        this.setupFilterListeners('exams');
+                        this.renderExams();
                     }
                 });
             }
@@ -2017,6 +2135,7 @@ body.dragging-active {
             }
             
             switchView(viewId) {
+                console.log('switchView llamado con', viewId);
                 document.querySelectorAll('.view-panel').forEach(p => p.classList.add('hidden'));
                 document.getElementById(`${viewId}-view`)?.classList.remove('hidden');
                 document.querySelectorAll('.nav-item').forEach(i => {
@@ -2027,11 +2146,15 @@ body.dragging-active {
                 document.getElementById('pageTitle').textContent = titles[viewId] || 'StudyOS';
                 this.currentView = viewId;
                 
-                // SIEMPRE re-renderizar el planificador cuando se navega a él
+                // Insertar barra de filtros en las vistas que corresponda
+                if (viewId === 'tasks' || viewId === 'subjects' || viewId === 'exams') {
+                    this.insertFilterBar(viewId);
+                    this.setupFilterListeners(viewId);
+                }
+                
                 if (viewId === 'planner') {
                     if (!this.selectedDate) this.selectedDate = new Date();
                     this.currentPlannerDate = new Date(this.selectedDate);
-                    // No forzamos scroll a hoy, usamos selectedDate
                     this._scrollToToday = false;
                     this.renderPlanner();
                 } else if (this.viewsDirty[viewId] || viewId === 'dashboard') {
@@ -3717,103 +3840,229 @@ body.dragging-active {
                     label.textContent = `${months[this.currentPlannerDate.getMonth()]} ${this.currentPlannerDate.getFullYear()}`;
                 }
             }
+
+            buildFilterBar(viewType) {
+                const subjects = this.data.subjects;
+                const subjectOptions = subjects.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+
+                let html = '';
+                if (viewType === 'tasks') {
+                    const f = this.activeFilters.tasks;
+                    html = `
+                        <div class="filter-bar-advanced">
+                            <input type="text" class="filter-input" id="taskSearch" placeholder="🔍 Buscar tarea..." value="${f.search}">
+                            <select class="filter-select" id="taskFilterStatus">
+                                <option value="all">📋 Todos</option>
+                                <option value="pendiente">Pendiente</option>
+                                <option value="en progreso">En progreso</option>
+                                <option value="completada">Completada</option>
+                                <option value="vencida">Vencida</option>
+                            </select>
+                            <select class="filter-select" id="taskFilterPriority">
+                                <option value="all">🚩 Prioridad</option>
+                                <option value="alta">Alta</option>
+                                <option value="media">Media</option>
+                                <option value="baja">Baja</option>
+                            </select>
+                            <select class="filter-select" id="taskFilterSubject">
+                                <option value="all">📚 Asignatura</option>
+                                ${subjectOptions}
+                            </select>
+                            <div class="date-range">
+                                <input type="date" class="filter-input" id="taskDateFrom" value="${f.dateFrom}">
+                                <span>a</span>
+                                <input type="date" class="filter-input" id="taskDateTo" value="${f.dateTo}">
+                            </div>
+                            <select class="filter-select" id="taskSort">
+                                <option value="date">📅 Fecha</option>
+                                <option value="priority">🚩 Prioridad</option>
+                                <option value="title">🔤 Título</option>
+                            </select>
+                            <button class="btn-secondary" id="clearTaskFilters">Limpiar</button>
+                        </div>
+                    `;
+                } else if (viewType === 'subjects') {
+                    const f = this.activeFilters.subjects;
+                    html = `
+                        <div class="filter-bar-advanced">
+                            <input type="text" class="filter-input" id="subjectSearch" placeholder="🔍 Buscar..." value="${f.search}">
+                            <div class="range-slider">
+                                <input type="number" class="filter-input" id="subjectProgressMin" placeholder="Progreso min" min="0" max="100" value="${f.progressMin}">
+                                <span>a</span>
+                                <input type="number" class="filter-input" id="subjectProgressMax" placeholder="Progreso max" min="0" max="100" value="${f.progressMax}">
+                            </div>
+                            <select class="filter-select" id="subjectSort">
+                                <option value="name">🔤 Nombre</option>
+                                <option value="progress">📊 Progreso</option>
+                                <option value="credits">🎓 Créditos</option>
+                            </select>
+                            <button class="btn-secondary" id="clearSubjectFilters">Limpiar</button>
+                        </div>
+                    `;
+                } else if (viewType === 'exams') {
+                    const f = this.activeFilters.exams;
+                    html = `
+                        <div class="filter-bar-advanced">
+                            <input type="text" class="filter-input" id="examSearch" placeholder="🔍 Buscar..." value="${f.search}">
+                            <select class="filter-select" id="examFilterSubject">
+                                <option value="all">📚 Asignatura</option>
+                                ${subjectOptions}
+                            </select>
+                            <select class="filter-select" id="examFilterStatus">
+                                <option value="all">📋 Todos</option>
+                                <option value="active">Activos</option>
+                                <option value="completed">Completados</option>
+                            </select>
+                            <div class="date-range">
+                                <input type="date" class="filter-input" id="examDateFrom" value="${f.dateFrom}">
+                                <span>a</span>
+                                <input type="date" class="filter-input" id="examDateTo" value="${f.dateTo}">
+                            </div>
+                            <div class="range-inputs">
+                                <input type="number" class="filter-input" id="examWeightMin" placeholder="Peso min %" min="0" max="100" value="${f.weightMin}">
+                                <input type="number" class="filter-input" id="examWeightMax" placeholder="Peso max %" min="0" max="100" value="${f.weightMax}">
+                                <input type="number" class="filter-input" id="examGradeMin" placeholder="Nota min" min="0" max="10" step="0.1" value="${f.gradeMin}">
+                                <input type="number" class="filter-input" id="examGradeMax" placeholder="Nota max" min="0" max="10" step="0.1" value="${f.gradeMax}">
+                            </div>
+                            <select class="filter-select" id="examSort">
+                                <option value="date">📅 Fecha</option>
+                                <option value="weight">⚖️ Peso</option>
+                                <option value="grade">📈 Nota</option>
+                            </select>
+                            <button class="btn-secondary" id="clearExamFilters">Limpiar</button>
+                        </div>
+                    `;
+                }
+                return html;
+            }
+
+            insertFilterBar(viewType) {
+                const container = document.getElementById(`${viewType}FilterBarContainer`);
+                console.log('insertFilterBar', viewType, 'container:', container);
+                if (container) {
+                    container.innerHTML = this.buildFilterBar(viewType);
+                    console.log('HTML insertado, longitud:', container.innerHTML.length);
+                } else {
+                    console.error('No se encontró el contenedor:', `${viewType}FilterBarContainer`);
+                }
+            }
+
+            normalizeString(str) {
+                return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            }
             
             renderTasks() {
-                const statusFilter = document.getElementById('taskFilterStatus')?.value || 'all';
-                const subjectFilter = document.getElementById('taskFilterSubject')?.value || 'all';
+                const f = this.activeFilters.tasks;
+                let tasks = [...this.data.tasks];
+
+                // Búsqueda de texto
+                if (f.search) {
+                    const q = this.normalizeString(f.search);
+                    tasks = tasks.filter(t => 
+                        this.normalizeString(t.title).includes(q) || 
+                        (t.description && this.normalizeString(t.description).includes(q))
+                    );
+                }
+
+                // Filtro estado
+                if (f.status !== 'all') {
+                    if (f.status === 'vencida') {
+                        const today = getLocalDateString(new Date());
+                        tasks = tasks.filter(t => t.status !== 'completada' && t.dueDate && t.dueDate < today);
+                    } else {
+                        tasks = tasks.filter(t => t.status === f.status);
+                    }
+                }
+
+                // Prioridad
+                if (f.priority !== 'all') {
+                    tasks = tasks.filter(t => t.priority === f.priority);
+                }
+
+                // Asignatura
+                if (f.subject !== 'all') {
+                    tasks = tasks.filter(t => t.subjectId === f.subject);
+                }
+
+                // Rango de fechas
+                if (f.dateFrom) tasks = tasks.filter(t => t.dueDate && t.dueDate >= f.dateFrom);
+                if (f.dateTo) tasks = tasks.filter(t => t.dueDate && t.dueDate <= f.dateTo);
+
+                // Ordenación
+                const sortMap = {
+                    date: (a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''),
+                    priority: (a, b) => { const p = { alta: 0, media: 1, baja: 2 }; return p[a.priority] - p[b.priority]; },
+                    title: (a, b) => a.title.localeCompare(b.title)
+                };
+                tasks.sort(sortMap[f.sort] || sortMap.date);
+
+                // Separar en vencidas, activas, completadas
                 const today = getLocalDateString(new Date());
-                
-                // Obtener todas las tareas
-                let allTasks = [...this.data.tasks];
-                
-                // Aplicar filtro de asignatura
-                if (subjectFilter !== 'all') {
-                    allTasks = allTasks.filter(t => t.subjectId === subjectFilter);
-                }
-                
-                // Separar tareas por estado REAL (independientemente de la fecha)
-                const completedTasks = allTasks.filter(t => t.status === 'completada');
-                const pendingOrProgressTasks = allTasks.filter(t => t.status !== 'completada');
-                
-                // De las no completadas, separar vencidas de activas
-                const overdueTasks = pendingOrProgressTasks.filter(t => t.dueDate && t.dueDate < today);
-                const activeTasks = pendingOrProgressTasks.filter(t => !t.dueDate || t.dueDate >= today);
-                
-                // APLICAR FILTRO DE ESTADO (según lo que seleccionó el usuario)
-                let filteredOverdue = [];
-                let filteredActive = [];
-                let filteredCompleted = [];
-                
-                switch(statusFilter) {
-                    case 'pendiente':
-                        filteredActive = activeTasks.filter(t => t.status === 'pendiente');
-                        filteredOverdue = overdueTasks.filter(t => t.status === 'pendiente');
-                        filteredCompleted = [];
-                        break;
-                    case 'en progreso':
-                        filteredActive = activeTasks.filter(t => t.status === 'en progreso');
-                        filteredOverdue = overdueTasks.filter(t => t.status === 'en progreso');
-                        filteredCompleted = [];
-                        break;
-                    case 'completada':
-                        filteredActive = [];
-                        filteredOverdue = [];
-                        filteredCompleted = completedTasks;
-                        break;
-                    case 'vencida':
-                        // Mostrar SOLO tareas vencidas (sin importar su estado interno)
-                        filteredActive = [];
-                        filteredOverdue = overdueTasks;
-                        filteredCompleted = [];
-                        break;
-                    case 'all':
-                    default:
-                        filteredActive = activeTasks;
-                        filteredOverdue = overdueTasks;
-                        filteredCompleted = completedTasks;
-                        break;
-                }
-                
-                // Limitar cantidad de elementos mostrados
+                const overdueTasks = tasks.filter(t => t.status !== 'completada' && t.dueDate && t.dueDate < today);
+                const activeTasks = tasks.filter(t => !(t.status !== 'completada' && t.dueDate && t.dueDate < today) && t.status !== 'completada');
+                const completedTasks = tasks.filter(t => t.status === 'completada');
+
+                // Limitar
                 const maxItems = this.MAX_ITEMS_PER_LIST;
-                
-                // Renderizar VENCIDAS
-                let overdueHtml = filteredOverdue.slice(0, maxItems).map(t => this.createTaskHTML(t, true)).join('');
-                if (filteredOverdue.length > maxItems) {
-                    overdueHtml += `<div style="padding: 16px; text-align: center; color: var(--danger);">+ ${filteredOverdue.length - maxItems} tareas vencidas más</div>`;
+
+                // ---------- VENCIDAS ----------
+                let overdueHtml = overdueTasks.slice(0, maxItems).map(t => this.createTaskHTML(t, true)).join('');
+                if (overdueTasks.length > maxItems) {
+                    overdueHtml += `<div style="padding: 16px; text-align: center; color: var(--danger);">+ ${overdueTasks.length - maxItems} tareas vencidas más</div>`;
                 }
                 const overdueContainer = document.getElementById('overdueTasksList');
                 if (overdueContainer) {
                     overdueContainer.innerHTML = overdueHtml || '<div style="padding: 20px; text-align: center; color: var(--text-tertiary);">¡Bien! No hay tareas vencidas 🎉</div>';
-                    this.attachTaskEvents(overdueContainer, filteredOverdue);
+                    this.attachTaskEvents(overdueContainer, overdueTasks);
                 }
-                
-                // Renderizar ACTIVAS
-                let activeHtml = filteredActive.slice(0, maxItems).map(t => this.createTaskHTML(t)).join('');
-                if (filteredActive.length > maxItems) {
-                    activeHtml += `<div style="padding: 16px; text-align: center; color: var(--text-tertiary);">+ ${filteredActive.length - maxItems} tareas más (usa los filtros)</div>`;
+
+                // ---------- ACTIVAS ----------
+                let activeHtml = activeTasks.slice(0, maxItems).map(t => this.createTaskHTML(t)).join('');
+                if (activeTasks.length > maxItems) {
+                    activeHtml += `<div style="padding: 16px; text-align: center; color: var(--text-tertiary);">+ ${activeTasks.length - maxItems} tareas más (usa los filtros)</div>`;
                 }
                 const activeContainer = document.getElementById('activeTasksList');
                 if (activeContainer) {
                     activeContainer.innerHTML = activeHtml || '<div style="padding: 20px; text-align: center; color: var(--text-tertiary);">No hay tareas activas</div>';
-                    this.attachTaskEvents(activeContainer, filteredActive);
+                    this.attachTaskEvents(activeContainer, activeTasks);
                 }
-                
-                // Renderizar COMPLETADAS
-                let completedHtml = filteredCompleted.slice(0, maxItems).map(t => this.createTaskHTML(t)).join('');
-                if (filteredCompleted.length > maxItems) {
-                    completedHtml += `<div style="padding: 16px; text-align: center; color: var(--text-tertiary);">+ ${filteredCompleted.length - maxItems} tareas más (usa los filtros)</div>`;
+
+                // ---------- COMPLETADAS ----------
+                let completedHtml = completedTasks.slice(0, maxItems).map(t => this.createTaskHTML(t)).join('');
+                if (completedTasks.length > maxItems) {
+                    completedHtml += `<div style="padding: 16px; text-align: center; color: var(--text-tertiary);">+ ${completedTasks.length - maxItems} tareas más (usa los filtros)</div>`;
                 }
                 const completedContainer = document.getElementById('completedTasksList');
                 if (completedContainer) {
                     completedContainer.innerHTML = completedHtml || '<div style="padding: 20px; text-align: center; color: var(--text-tertiary);">No hay tareas completadas</div>';
-                    this.attachTaskEvents(completedContainer, filteredCompleted);
+                    this.attachTaskEvents(completedContainer, completedTasks);
                 }
             }
             
             renderSubjects() {
+                const f = this.activeFilters.subjects;
+                let subjects = [...this.data.subjects];
+                
+                if (f.search) {
+                    const q = this.normalizeString(f.search);
+                    subjects = subjects.filter(s => 
+                        this.normalizeString(s.name).includes(q) || 
+                        (s.professor && this.normalizeString(s.professor).includes(q))
+                    );
+                }
+
+                if (f.progressMin !== '') subjects = subjects.filter(s => s.progress >= parseInt(f.progressMin));
+                if (f.progressMax !== '') subjects = subjects.filter(s => s.progress <= parseInt(f.progressMax));
+
+                const sortMap = {
+                    name: (a, b) => a.name.localeCompare(b.name),
+                    progress: (a, b) => a.progress - b.progress,
+                    credits: (a, b) => b.credits - a.credits
+                };
+                subjects.sort(sortMap[f.sort] || sortMap.name);
+
                 const container = document.getElementById('subjectsList');
-                container.innerHTML = this.data.subjects.map(s => `
+                container.innerHTML = subjects.map(s => `
                     <div class="subject-item">
                         <div class="subject-header">
                             <span class="subject-name"><i class="fas fa-book" style="color: ${s.color};"></i> ${s.name}</span>
@@ -3828,7 +4077,7 @@ body.dragging-active {
                         <div style="font-size: 13px; color: var(--text-tertiary);">${s.professor} · ${s.credits} créditos</div>
                     </div>
                 `).join('');
-                
+
                 container.querySelectorAll('[data-edit-subject]').forEach(el => {
                     el.addEventListener('click', () => { const s = this.getSubjectById(el.dataset.editSubject); if (s) this.openSubjectModal(s); });
                 });
@@ -3854,7 +4103,7 @@ body.dragging-active {
                         }
                     });
                 });
-                
+
                 setTimeout(() => this.updateSubjectsChart(), 50);
             }
 
@@ -3932,9 +4181,38 @@ body.dragging-active {
             };
             
             renderExams() {
-                const active = this.data.exams.filter(e => !e.completed).slice(0, this.MAX_ITEMS_PER_LIST);
-                const completed = this.data.exams.filter(e => e.completed).slice(0, this.MAX_ITEMS_PER_LIST);
-                
+                const f = this.activeFilters.exams;
+                let exams = [...this.data.exams];
+
+                if (f.search) {
+                    const q = this.normalizeString(f.search);
+                    exams = exams.filter(e => this.normalizeString(e.name).includes(q));
+                }
+
+                if (f.subject !== 'all') exams = exams.filter(e => e.subjectId === f.subject);
+
+                if (f.status === 'active') exams = exams.filter(e => !e.completed);
+                else if (f.status === 'completed') exams = exams.filter(e => e.completed);
+
+                if (f.dateFrom) exams = exams.filter(e => e.date >= f.dateFrom);
+                if (f.dateTo) exams = exams.filter(e => e.date <= f.dateTo);
+
+                if (f.weightMin !== '') exams = exams.filter(e => (e.weight * 100) >= parseFloat(f.weightMin));
+                if (f.weightMax !== '') exams = exams.filter(e => (e.weight * 100) <= parseFloat(f.weightMax));
+
+                if (f.gradeMin !== '') exams = exams.filter(e => e.grade !== null && e.grade >= parseFloat(f.gradeMin));
+                if (f.gradeMax !== '') exams = exams.filter(e => e.grade !== null && e.grade <= parseFloat(f.gradeMax));
+
+                const sortMap = {
+                    date: (a, b) => a.date.localeCompare(b.date),
+                    weight: (a, b) => b.weight - a.weight,
+                    grade: (a, b) => (b.grade || 0) - (a.grade || 0)
+                };
+                exams.sort(sortMap[f.sort] || sortMap.date);
+
+                const active = exams.filter(e => !e.completed).slice(0, this.MAX_ITEMS_PER_LIST);
+                const completed = exams.filter(e => e.completed).slice(0, this.MAX_ITEMS_PER_LIST);
+
                 document.getElementById('activeExamsList').innerHTML = active.length ? active.map(e => this.createExamWithActions(e)).join('') : '<div style="padding: 20px; text-align: center; color: var(--text-tertiary);">No hay exámenes activos</div>';
                 document.getElementById('completedExamsList').innerHTML = completed.length ? completed.map(e => this.createExamWithActions(e, true)).join('') : '<div style="padding: 20px; text-align: center; color: var(--text-tertiary);">No hay exámenes finalizados</div>';
                 this.attachExamEvents();
