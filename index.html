@@ -950,9 +950,8 @@ body.dragging-active {
 /* ===== BLOQUES DE HORARIO ===== */
 .schedule-block {
     position: absolute;
-    left: 4px;
-    right: 4px;
-    padding: 2px 6px;            /* más compacto */
+    /* left y width se definen en línea */
+    padding: 2px 6px;
     border-radius: var(--radius-sm);
     font-size: 11px;
     cursor: pointer;
@@ -960,12 +959,12 @@ body.dragging-active {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    justify-content: center;      /* centrado vertical */
+    justify-content: center;
     gap: 1px;
     z-index: 1;
-    border-left: 3px solid rgba(0,0,0,0.2);
     box-shadow: var(--shadow-sm);
-    min-height: 24px;            /* altura mínima para legibilidad */
+    min-height: 24px;
+    box-sizing: border-box;   /* ← añadir esta línea */
 }
 
 .schedule-block:hover {
@@ -990,7 +989,6 @@ body.dragging-active {
     display: flex;
     flex-wrap: wrap;
     gap: 2px;
-    /* Para evitar que se desborde si el bloque es muy pequeño */
     overflow: hidden;
 }
 
@@ -1009,6 +1007,59 @@ body.dragging-active {
 
 .schedule-block-small .schedule-block-title {
     font-size: 10px;
+}
+
+/* ===== TOOLTIP PERSONALIZADO PARA HORARIO ===== */
+#scheduleTooltip {
+    display: none;
+    position: fixed;
+    z-index: 10001;
+    max-width: 280px;
+    padding: 10px 14px;
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    font-size: 13px;
+    line-height: 1.5;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    color: var(--text-primary);
+}
+#scheduleTooltip.visible {
+    display: block;
+    opacity: 1;
+}
+#scheduleTooltip .tt-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 0;
+}
+#scheduleTooltip .tt-item + .tt-item {
+    border-top: 1px solid var(--border-light);
+    margin-top: 4px;
+    padding-top: 8px;
+}
+#scheduleTooltip .tt-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+}
+#scheduleTooltip .tt-content {
+    flex: 1;
+}
+#scheduleTooltip .tt-title {
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+#scheduleTooltip .tt-time {
+    color: var(--text-secondary);
+    font-size: 12px;
 }
 
 </style>
@@ -4600,8 +4651,31 @@ body.dragging-active {
                 if (!startTime || !endTime) { this.showToast('Horas requeridas', 'error'); return; }
                 if (startTime >= endTime) { this.showToast('Hora fin debe ser posterior a hora inicio', 'error'); return; }
 
+                // Construir el objeto de datos desde el principio
                 const blockData = { subjectId, dayOfWeek, type, startTime, endTime, classroom: classroom || null };
 
+                // Validar que no se solape con otros bloques del mismo día
+                const conflictingBlock = this.data.schedules.find(s => {
+                    if (s.dayOfWeek !== dayOfWeek) return false;
+                    if (id && s.id === id) return false;
+                    return startTime < s.endTime && endTime > s.startTime;
+                });
+
+                if (conflictingBlock) {
+                    const subjectName = this.getSubjectById(conflictingBlock.subjectId)?.name || 'Otra asignatura';
+                    ConfirmDialog.show(
+                        `⚠️ Ya existe "${subjectName}" de ${conflictingBlock.startTime} a ${conflictingBlock.endTime}. ¿Guardar de todos modos?`,
+                        () => this.finalizeScheduleSave(id, blockData),
+                        () => this.showToast('Operación cancelada', 'info')
+                    );
+                    return;
+                }
+
+                // Sin conflicto: guardar directamente
+                this.finalizeScheduleSave(id, blockData);
+            }
+
+            finalizeScheduleSave(id, blockData) {
                 if (id) {
                     const idx = this.data.schedules.findIndex(s => s.id === id);
                     if (idx !== -1) {
@@ -4612,7 +4686,7 @@ body.dragging-active {
                     this.data.schedules.push(blockData);
                 }
 
-                this.saveData();  // 🔥 ESTA LÍNEA ES CRÍTICA
+                this.forceSave();
                 this.closeModal();
                 this.renderSchedule();
                 this.showToast(id ? 'Bloque actualizado' : 'Bloque creado', 'success');
@@ -4680,41 +4754,38 @@ body.dragging-active {
                     html += `<div class="schedule-day-body" style="position: relative; height: ${totalSlots * slotHeight}px; margin-top: 0; padding-top: 0;">`;
                     
                     const dayBlocks = blocks.filter(b => b.dayOfWeek === day);
-                    dayBlocks.forEach(block => {
+                    const laidOutBlocks = this.layoutDayBlocks(dayBlocks);
+
+                    laidOutBlocks.forEach(lb => {
+                        const block = lb.block;
                         const subject = this.getSubjectById(block.subjectId);
-                        const [startH, startM] = block.startTime.split(':').map(Number);
-                        const [endH, endM] = block.endTime.split(':').map(Number);
-                        
-                        const startMinutes = (startH * 60 + startM) - (startHour * 60);
-                        const endMinutes = (endH * 60 + endM) - (startHour * 60);
-                        
-                        if (startMinutes < 0 || endMinutes > totalSlots * 30) return; // fuera de rango
-                        
-                        const top = (startMinutes / 30) * slotHeight + 20;
-                        const height = ((endMinutes - startMinutes) / 30) * slotHeight;
-                        
-                        const bgColor = subject ? subject.color : '#0066FF';
-                        const bgStyle = this.hexToRgba(bgColor, 0.15);
-                        const textColor = bgColor;
-                        
+                        const top = lb.top;
+                        const height = lb.height;
+                        const left = lb.left;
+                        const width = lb.width;
+
+                        const subjectColor = subject ? subject.color : '#0066FF';
+                        const colors = this.getScheduleColors(subjectColor);
+                        const bgStyle = colors.bg;
+                        const textColor = colors.text;
+
+                        // Construir el texto del tooltip nativo
+                        const tooltipLines = [
+                            subject?.name || 'Sin asignatura',
+                            `${block.startTime} - ${block.endTime}`,
+                            block.classroom ? `📍 ${block.classroom}` : '',
+                            this.getTypeLabel(block.type)
+                        ].filter(Boolean).join('\n');
+
                         html += `
                             <div class="schedule-block" 
-                                style="top: ${top}px; height: ${height}px; background: ${bgStyle}; color: ${textColor};"
-                                data-schedule-id="${block.id}"
-                                title="${subject?.name || 'Sin asignatura'} - ${block.startTime} a ${block.endTime}${block.classroom ? ' - ' + block.classroom : ''} - ${this.getTypeLabel(block.type)}">
+                                style="top: ${top}px; height: ${height}px; left: ${left}; width: ${width}; background: ${bgStyle}; color: ${textColor}; border-left: 3px solid ${subjectColor};"
+                                data-schedule-id="${block.id}">
                                 <div class="schedule-block-title">${subject?.name || 'Sin asignatura'}</div>
                                 <div class="schedule-block-meta">
                                     <span class="schedule-block-time">${block.startTime} - ${block.endTime}</span>
                                     ${block.classroom ? `<span class="schedule-block-classroom">📍 ${block.classroom}</span>` : ''}
                                     <span>${this.getTypeLabel(block.type)}</span>
-                                </div>
-                                <div style="position: absolute; top: 2px; right: 4px; display: flex; gap: 4px;">
-                                    <button class="btn-icon" data-edit-schedule="${block.id}" style="font-size: 10px; padding: 2px 4px;">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="btn-icon" data-delete-schedule="${block.id}" style="font-size: 10px; padding: 2px 4px;">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
                                 </div>
                             </div>
                         `;
@@ -4728,10 +4799,158 @@ body.dragging-active {
                 
                 grid.innerHTML = html;
                 requestAnimationFrame(() => {
-                    this.fixScheduleAlignment();      // si lo usas
+                    this.fixScheduleAlignment();
                     this.adjustSmallScheduleBlocks();
                 });
                 this.attachScheduleEvents();
+            }
+
+            getScheduleColors(hexColor) {
+                // Convertir hex a RGB
+                const hex = hexColor.replace('#', '');
+                const r = parseInt(hex.substring(0, 2), 16);
+                const g = parseInt(hex.substring(2, 4), 16);
+                const b = parseInt(hex.substring(4, 6), 16);
+                
+                // Calcular brillo (fórmula perceptual)
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                
+                // Si el color es muy claro (blanco o casi blanco), usar color primario como fallback
+                if (brightness > 240) {
+                    return {
+                        bg: `rgba(0, 102, 255, 0.08)`,   // azul primario muy suave
+                        text: '#0F172A'                   // texto oscuro
+                    };
+                }
+                
+                // Crear color pastel muy claro (mezcla con blanco al 90%)
+                const pastelR = Math.round(r + (255 - r) * 0.90);
+                const pastelG = Math.round(g + (255 - g) * 0.90);
+                const pastelB = Math.round(b + (255 - b) * 0.90);
+                
+                return {
+                    bg: `rgba(${pastelR}, ${pastelG}, ${pastelB}, 0.95)`,
+                    text: '#0F172A'                      // texto oscuro para máximo contraste
+                };
+            }
+
+            layoutDayBlocks(blocks) {
+                const startHour = 7, endHour = 21;
+                const slotHeight = 40;
+                const totalSlots = (endHour - startHour) * 2;
+
+                // Ordenar por hora de inicio (y luego por duración descendente si empatan)
+                const sorted = [...blocks].sort((a, b) => {
+                    if (a.startTime !== b.startTime) return a.startTime.localeCompare(b.startTime);
+                    return b.endTime.localeCompare(a.endTime); // más largo primero
+                });
+
+                // Agrupar en clusters de solapamiento
+                const clusters = [];
+                let currentCluster = [];
+                let clusterEnd = '';
+
+                sorted.forEach(block => {
+                    if (currentCluster.length === 0 || block.startTime < clusterEnd) {
+                        currentCluster.push(block);
+                        if (block.endTime > clusterEnd) clusterEnd = block.endTime;
+                    } else {
+                        clusters.push(currentCluster);
+                        currentCluster = [block];
+                        clusterEnd = block.endTime;
+                    }
+                });
+                if (currentCluster.length > 0) clusters.push(currentCluster);
+
+                const laidOut = [];
+
+                clusters.forEach(cluster => {
+                    if (cluster.length === 1) {
+                        // Un solo bloque: ocupa todo el ancho
+                        const block = cluster[0];
+                        const [startH, startM] = block.startTime.split(':').map(Number);
+                        const [endH, endM] = block.endTime.split(':').map(Number);
+                        const startMinutes = (startH * 60 + startM) - (startHour * 60);
+                        const endMinutes = (endH * 60 + endM) - (startHour * 60);
+                        const top = (startMinutes / 30) * slotHeight + 20;
+                        const height = ((endMinutes - startMinutes) / 30) * slotHeight;
+                        laidOut.push({ block, top, height, left: '0%', width: '100%' });
+                    } else {
+                        // Varios bloques: el primero ocupa el 100%, los demás se reparten el 40% derecho
+                        const mainBlock = cluster[0];
+                        const secondaryBlocks = cluster.slice(1);
+
+                        // Bloque principal
+                        const [startH, startM] = mainBlock.startTime.split(':').map(Number);
+                        const [endH, endM] = mainBlock.endTime.split(':').map(Number);
+                        const startMinutes = (startH * 60 + startM) - (startHour * 60);
+                        const endMinutes = (endH * 60 + endM) - (startHour * 60);
+                        const top = (startMinutes / 30) * slotHeight + 20;
+                        const height = ((endMinutes - startMinutes) / 30) * slotHeight;
+                        laidOut.push({ block: mainBlock, top, height, left: '0%', width: '100%' });
+
+                        // Procesar secundarios (sin solaparse entre ellos)
+                        const secondaryLaidOut = this.layoutSecondaryBlocks(secondaryBlocks, startHour, slotHeight);
+                        laidOut.push(...secondaryLaidOut);
+                    }
+                });
+
+                return laidOut;
+            }
+
+            layoutSecondaryBlocks(blocks, startHour, slotHeight) {
+                // Ordenar por hora de inicio
+                const sorted = [...blocks].sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+                // Agrupar en sub-clusters dentro del grupo secundario
+                const subClusters = [];
+                let currentSub = [];
+                let subEnd = '';
+
+                sorted.forEach(block => {
+                    if (currentSub.length === 0 || block.startTime < subEnd) {
+                        currentSub.push(block);
+                        if (block.endTime > subEnd) subEnd = block.endTime;
+                    } else {
+                        subClusters.push(currentSub);
+                        currentSub = [block];
+                        subEnd = block.endTime;
+                    }
+                });
+                if (currentSub.length > 0) subClusters.push(currentSub);
+
+                const laidOut = [];
+
+                subClusters.forEach(subCluster => {
+                    const n = subCluster.length;
+                    // Asignar columnas dentro del 40% derecho
+                    const columns = new Array(n).fill(-1);
+                    for (let i = 0; i < n; i++) {
+                        let col = 0;
+                        while (columns.slice(0, i).some((c, j) => c === col && subCluster[j].endTime > subCluster[i].startTime)) {
+                            col++;
+                        }
+                        columns[i] = col;
+                    }
+                    const maxCol = Math.max(...columns) + 1;
+
+                    subCluster.forEach((block, idx) => {
+                        const [startH, startM] = block.startTime.split(':').map(Number);
+                        const [endH, endM] = block.endTime.split(':').map(Number);
+                        const startMinutes = (startH * 60 + startM) - (startHour * 60);
+                        const endMinutes = (endH * 60 + endM) - (startHour * 60);
+                        const top = (startMinutes / 30) * slotHeight + 20;
+                        const height = ((endMinutes - startMinutes) / 30) * slotHeight;
+
+                        const colWidth = 60 / maxCol; // base 60% del espacio derecho
+                        const left = 100 - 60 + columns[idx] * colWidth; // comienza en 40% desde la izquierda
+                        const width = colWidth;
+
+                        laidOut.push({ block, top, height, left: left + '%', width: width + '%' });
+                    });
+                });
+
+                return laidOut;
             }
 
             adjustSmallScheduleBlocks() {
@@ -4783,33 +5002,327 @@ body.dragging-active {
             }
 
             attachScheduleEvents() {
-                // Editar bloque
-                document.querySelectorAll('[data-edit-schedule]').forEach(el => {
-                    el.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        const block = this.data.schedules.find(s => s.id === el.dataset.editSchedule);
-                        if (block) this.openScheduleModal(block);
+                const grid = document.getElementById('scheduleGrid');
+                if (!grid) return;
+
+                // Crear el tooltip personalizado si no existe
+                if (!this.scheduleTooltip) {
+                    this.scheduleTooltip = document.createElement('div');
+                    this.scheduleTooltip.id = 'scheduleTooltip';
+                    document.body.appendChild(this.scheduleTooltip);
+                }
+                const tooltip = this.scheduleTooltip;
+
+                // Variables para controlar el retardo
+                let showTimer = null;
+                let currentBlock = null;          // bloque sobre el que estamos
+                let isTooltipVisible = false;
+
+                const scheduleContainer = grid.parentNode; // div con overflow:auto
+
+                // Ocultar tooltip al hacer scroll en el contenedor
+                if (scheduleContainer) {
+                    scheduleContainer.addEventListener('scroll', () => {
+                        hideTooltip();
+                    }, { passive: true });
+                }
+
+                // ========== FUNCIONES AUXILIARES ==========
+                const hideTooltip = () => {
+                    if (showTimer) {
+                        clearTimeout(showTimer);
+                        showTimer = null;
+                    }
+                    tooltip.classList.remove('visible');
+                    tooltip.style.display = 'none';
+                    isTooltipVisible = false;
+                    currentBlock = null;
+                };
+
+                const showTooltip = (block, overlappedSchedules) => {
+                    // Construir contenido HTML
+                    let html = '';
+                    overlappedSchedules.forEach((schedule) => {
+                        const subject = this.getSubjectById(schedule.subjectId);
+                        const color = subject?.color || 'var(--primary)';
+                        const name = subject?.name || 'Sin asignatura';
+                        const timeStr = `${schedule.startTime} - ${schedule.endTime}`;
+                        const extra = schedule.classroom ? ` · ${schedule.classroom}` : '';
+                        const type = this.getTypeLabel(schedule.type);
+                        html += `
+                            <div class="tt-item">
+                                <span class="tt-dot" style="background: ${color};"></span>
+                                <div class="tt-content">
+                                    <div class="tt-title">${name}</div>
+                                    <div class="tt-time">${timeStr}${extra} · ${type}</div>
+                                </div>
+                            </div>
+                        `;
                     });
-                });
-                
-                // Eliminar bloque
-                document.querySelectorAll('[data-delete-schedule]').forEach(el => {
-                    el.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        ConfirmDialog.show('¿Eliminar este bloque horario?', () => {
-                            this.deleteSchedule(el.dataset.deleteSchedule);
-                        });
+                    tooltip.innerHTML = html;
+
+                    // Posicionar relativo al viewport (fixed)
+                    const blockRect = block.getBoundingClientRect();
+                    const ttWidth = tooltip.offsetWidth;
+                    const ttHeight = tooltip.offsetHeight;
+                    const margin = 12;
+
+                    let left = blockRect.right + margin;
+                    let top = blockRect.top + (blockRect.height - ttHeight) / 2;
+
+                    // Ajustar si se sale por la derecha
+                    if (left + ttWidth > window.innerWidth - margin) {
+                        left = blockRect.left - ttWidth - margin;
+                    }
+                    // Si se sale por la izquierda, colocar debajo del bloque
+                    if (left < margin) {
+                        left = blockRect.left;
+                        top = blockRect.bottom + margin;
+                    }
+                    // Si se sale por abajo, colocar encima
+                    if (top + ttHeight > window.innerHeight - margin) {
+                        top = blockRect.top - ttHeight - margin;
+                    }
+                    // Si aún así no cabe, forzar dentro del viewport
+                    left = Math.max(margin, Math.min(left, window.innerWidth - ttWidth - margin));
+                    top = Math.max(margin, Math.min(top, window.innerHeight - ttHeight - margin));
+
+                    tooltip.style.left = left + 'px';
+                    tooltip.style.top = top + 'px';
+                    tooltip.style.display = 'block';
+                    // Pequeño truco para que la transición de opacity funcione
+                    requestAnimationFrame(() => {
+                        tooltip.classList.add('visible');
                     });
+                    isTooltipVisible = true;
+                    currentBlock = block;
+                };
+
+                const getOverlappingSchedules = (x, y) => {
+                    const blocks = document.querySelectorAll('.schedule-block');
+                    const overlapped = [];
+                    blocks.forEach(block => {
+                        const rect = block.getBoundingClientRect();
+                        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                            const id = block.dataset.scheduleId;
+                            const s = this.data.schedules.find(s => s.id === id);
+                            if (s) overlapped.push(s);
+                        }
+                    });
+                    return overlapped;
+                };
+
+                // ========== EVENTOS ==========
+                // Delegación de mouseover en el grid
+                grid.addEventListener('mouseover', (e) => {
+                    const block = e.target.closest('.schedule-block');
+                    if (!block) {
+                        // Si el ratón sale de un bloque pero no del grid, ocultamos tras un pequeño retardo? 
+                        // mejor ocultar directamente si no está sobre ningún bloque.
+                        hideTooltip();
+                        return;
+                    }
+
+                    // Si ya estamos sobre el mismo bloque, no hacer nada
+                    if (block === currentBlock) return;
+
+                    // Cancelar cualquier temporizador anterior
+                    if (showTimer) clearTimeout(showTimer);
+
+                    // Iniciar temporizador para mostrar (retardo como el title nativo)
+                    showTimer = setTimeout(() => {
+                        const overlapped = getOverlappingSchedules(e.clientX, e.clientY);
+                        if (overlapped.length > 0) {
+                            // Encontrar el bloque que está realmente debajo del cursor (elementFromPoint)
+                            const topElement = document.elementFromPoint(e.clientX, e.clientY);
+                            const topBlock = topElement?.closest('.schedule-block');
+                            showTooltip(topBlock || block, overlapped);
+                        }
+                    }, 400); // 400ms de retardo
                 });
-                
-                // Click en bloque para editar
+
+                // Mousemove dentro del grid: si el tooltip ya está visible, actualizar posición y contenido al mover
+                grid.addEventListener('mousemove', (e) => {
+                    if (!isTooltipVisible) return;
+
+                    const block = e.target.closest('.schedule-block');
+                    if (!block) {
+                        hideTooltip();
+                        return;
+                    }
+
+                    // Actualizar solo si el bloque cambió o para refrescar (evitar parpadeo)
+                    if (block !== currentBlock) {
+                        hideTooltip();
+                        // Rearrancar el showTimer
+                        if (showTimer) clearTimeout(showTimer);
+                        showTimer = setTimeout(() => {
+                            const overlapped = getOverlappingSchedules(e.clientX, e.clientY);
+                            if (overlapped.length > 0) {
+                                const topElement = document.elementFromPoint(e.clientX, e.clientY);
+                                const topBlock = topElement?.closest('.schedule-block');
+                                showTooltip(topBlock || block, overlapped);
+                            }
+                        }, 400);
+                    } else {
+                        // Mismo bloque, podríamos actualizar el contenido si hay solapamiento variable, pero no es necesario.
+                        // Solo actualizamos la posición por si el ratón se mueve dentro del mismo bloque.
+                        const overlapped = getOverlappingSchedules(e.clientX, e.clientY);
+                        if (overlapped.length > 0) {
+                            // Reconstruir contenido (por si cambió el solapamiento)
+                            const topElement = document.elementFromPoint(e.clientX, e.clientY);
+                            const topBlock = topElement?.closest('.schedule-block');
+                            showTooltip(topBlock || block, overlapped);
+                        }
+                    }
+                });
+
+                // Mouseleave del grid: ocultar tooltip y cancelar temporizadores
+                grid.addEventListener('mouseleave', () => {
+                    hideTooltip();
+                });
+
+                // ========== CLICK EN BLOQUE: MENÚ CONTEXTUAL (SIN CAMBIOS) ==========
                 document.querySelectorAll('.schedule-block').forEach(block => {
-                    block.addEventListener('click', () => {
-                        const id = block.dataset.scheduleId;
-                        const s = this.data.schedules.find(s => s.id === id);
-                        if (s) this.openScheduleModal(s);
+                    block.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const clickX = e.clientX;
+                        const clickY = e.clientY;
+
+                        const blocks = document.querySelectorAll('.schedule-block');
+                        const overlappingBlocks = [];
+
+                        blocks.forEach(otherBlock => {
+                            const rect = otherBlock.getBoundingClientRect();
+                            if (
+                                clickX >= rect.left && clickX <= rect.right &&
+                                clickY >= rect.top && clickY <= rect.bottom
+                            ) {
+                                const id = otherBlock.dataset.scheduleId;
+                                const s = this.data.schedules.find(s => s.id === id);
+                                if (s) overlappingBlocks.push(s);
+                            }
+                        });
+
+                        this.showScheduleConflictSelector(overlappingBlocks, clickX, clickY);
                     });
                 });
+            }
+
+            showScheduleConflictSelector(blocks, x, y) {
+                // Eliminar cualquier selector previo
+                const existing = document.getElementById('scheduleConflictSelector');
+                if (existing) existing.remove();
+
+                const selector = document.createElement('div');
+                selector.id = 'scheduleConflictSelector';
+                selector.style.cssText = `
+                    position: fixed;
+                    z-index: 10000;
+                    background: var(--bg-card);
+                    backdrop-filter: blur(20px);
+                    border-radius: var(--radius-lg);
+                    padding: 8px;
+                    border: 1px solid var(--border-light);
+                    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
+                    min-width: 280px;
+                    max-width: 350px;
+                    animation: popIn 0.15s ease;
+                `;
+
+                selector.style.left = Math.min(x, window.innerWidth - 360) + 'px';
+                selector.style.top = Math.min(y, window.innerHeight - 250) + 'px';
+
+                let html = '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:6px;padding:0 8px;">Selecciona una acción:</div>';
+
+                blocks.forEach(block => {
+                    const subject = this.getSubjectById(block.subjectId);
+                    html += `
+                        <div class="schedule-conflict-option" style="
+                            padding: 10px 12px;
+                            cursor: pointer;
+                            border-radius: var(--radius-md);
+                            font-size: 12px;
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                            transition: background 0.1s;
+                            justify-content: space-between;
+                        " onmouseover="this.style.background='var(--bg-tertiary)'" 
+                        onmouseout="this.style.background=''">
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${subject?.name || 'Sin asignatura'}</div>
+                                <div style="color:var(--text-tertiary); font-size:10px;">${block.startTime} - ${block.endTime} · ${this.getTypeLabel(block.type)}</div>
+                            </div>
+                            <div style="display:flex; gap:6px; flex-shrink:0;">
+                                <button class="schedule-conflict-edit" data-schedule-id="${block.id}" style="
+                                    padding: 5px 10px;
+                                    border-radius: 20px;
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    background: var(--primary);
+                                    color: white;
+                                    border: none;
+                                    cursor: pointer;
+                                    white-space: nowrap;
+                                "><i class="fas fa-edit"></i> Editar</button>
+                                <button class="schedule-conflict-delete" data-schedule-id="${block.id}" style="
+                                    padding: 5px 10px;
+                                    border-radius: 20px;
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    background: rgba(239,68,68,0.1);
+                                    color: var(--danger);
+                                    border: none;
+                                    cursor: pointer;
+                                    white-space: nowrap;
+                                "><i class="fas fa-trash"></i> Eliminar</button>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                selector.innerHTML = html;
+                document.body.appendChild(selector);
+
+                // Botón editar
+                selector.querySelectorAll('.schedule-conflict-edit').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const id = btn.dataset.scheduleId;
+                        const block = this.data.schedules.find(s => s.id === id);
+                        if (block) this.openScheduleModal(block);
+                        selector.remove();
+                    });
+                });
+
+                // Botón eliminar
+                selector.querySelectorAll('.schedule-conflict-delete').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const id = btn.dataset.scheduleId;
+                        const block = this.data.schedules.find(s => s.id === id);
+                        if (block) {
+                            const subject = this.getSubjectById(block.subjectId);
+                            selector.remove();   // ← Cerrar el menú ANTES de pedir confirmación
+                            ConfirmDialog.show(
+                                `¿Eliminar "${subject?.name || 'Sin asignatura'}" (${block.startTime} - ${block.endTime})?`,
+                                () => {
+                                    this.deleteSchedule(id);
+                                }
+                            );
+                        }
+                    });
+                });
+
+                // Cerrar al hacer clic fuera
+                const closeHandler = (e) => {
+                    if (!selector.contains(e.target)) {
+                        selector.remove();
+                        document.removeEventListener('click', closeHandler);
+                    }
+                };
+                setTimeout(() => document.addEventListener('click', closeHandler), 10);
             }
             
             renderHabits() {
@@ -5174,6 +5687,7 @@ body.dragging-active {
                                 !Array.isArray(backup.data.exams) ||
                                 !Array.isArray(backup.data.habits) ||
                                 !Array.isArray(backup.data.objectives) ||
+                                !Array.isArray(backup.data.schedules) ||   // ← Añadir esta línea
                                 !backup.data.user) {
                                 throw new Error('Estructura de datos inválida');
                             }
