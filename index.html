@@ -1062,6 +1062,54 @@ body.dragging-active {
     font-size: 12px;
 }
 
+/* ===== AJUSTES ===== */
+.settings-group {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+}
+#avatarPreview {
+    transition: background 0.3s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+#avatarPreview:hover {
+    opacity: 0.9;
+}
+
+/* ===== PESTAÑAS DE AJUSTES ===== */
+.settings-tabs {
+    display: flex;
+    gap: 4px;
+}
+.settings-tab {
+    background: transparent;
+    border: none;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border-radius: 12px 12px 0 0;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px; /* para solapar con la línea */
+}
+.settings-tab:hover {
+    background: var(--bg-tertiary);
+}
+.settings-tab.active {
+    color: var(--primary);
+    border-bottom: 2px solid var(--primary);
+    background: var(--bg-tertiary);
+}
+.settings-panel {
+    animation: fadeIn 0.2s ease;
+}
+/* Ocultar panel inactivo */
+.settings-panel[style*="display: none"] {
+    display: none !important;
+}
+
 </style>
 
 </head>
@@ -1092,6 +1140,9 @@ body.dragging-active {
             <button class="nav-item" data-view="schedule">
                 <i class="fas fa-clock"></i><span>Horarios</span>
             </button>
+            <button class="nav-item" data-view="settings">
+                <i class="fas fa-cog"></i><span>Ajustes</span>
+            </button>
                         
             <div class="nav-divider"><span>Análisis</span></div>
             
@@ -1121,21 +1172,7 @@ body.dragging-active {
                 <h1 class="page-title" id="pageTitle">Dashboard</h1>
             </div>
             
-            <div class="header-right">
-                <button class="theme-toggle" id="themeToggle">
-                    <i class="fas fa-moon"></i>
-                </button>
-                
-                <button class="btn-secondary" id="exportDataBtn">
-                    <i class="fas fa-download"></i><span>Exportar</span>
-                </button>
-                <button class="btn-secondary" id="importDataBtn">
-                    <i class="fas fa-upload"></i><span>Importar</span>
-                </button>
-                <button class="btn-secondary" id="clearDataBtn">
-                    <i class="fas fa-trash-alt"></i><span>Limpiar</span>
-                </button>
-                
+            <div class="header-right">               
                 <button class="btn-primary" id="quickAddBtn">
                     <i class="fas fa-plus"></i><span>Nueva Tarea</span>
                 </button>
@@ -1377,6 +1414,111 @@ body.dragging-active {
                 
                 <h4 class="section-title">🏆 Completados</h4>
                 <div class="objective-list" id="completedObjectivesList"></div>
+            </div>
+        </div>
+
+        <!-- Settings View -->
+        <div id="settings-view" class="view-panel hidden">
+            <div class="card" style="padding: 28px; max-width: 850px; margin: 0 auto;">
+                <h2 style="margin-bottom: 24px;">⚙️ Ajustes</h2>
+
+                <!-- Pestañas de navegación -->
+                <div class="settings-tabs" style="display: flex; gap: 8px; margin-bottom: 28px; border-bottom: 2px solid var(--border-light); padding-bottom: 0;">
+                    <button class="settings-tab active" data-tab="appearance">🎨 Apariencia</button>
+                    <button class="settings-tab" data-tab="profile">👤 Perfil</button>
+                    <button class="settings-tab" data-tab="data">💾 Datos</button>
+                </div>
+
+                <!-- Panel Apariencia -->
+                <div id="settings-panel-appearance" class="settings-panel">
+                    <div class="settings-group">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                            <div>
+                                <label class="form-label">Tema</label>
+                                <select class="form-select" id="themeSelect">
+                                    <option value="light">Claro</option>
+                                    <option value="dark">Oscuro</option>
+                                    <option value="system">Sistema</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Color de acento</label>
+                                <div class="color-picker-container" id="accentColorPicker"></div>
+                                <div class="custom-color-input" style="margin-top: 8px;">
+                                    <input type="color" id="accentColorInput" value="#0066FF">
+                                    <input type="text" id="accentColorText" value="#0066FF" placeholder="#0066FF">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Avatar -->
+                    <div style="margin-top: 28px;">
+                        <label class="form-label" style="margin-bottom: 12px;">Avatar</label>
+                        <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 16px;">
+                            <div id="avatarPreview" style="width: 80px; height: 80px; border-radius: 50%; background: var(--primary); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 28px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); flex-shrink: 0; position: relative;">
+                                <span id="avatarInitials">MC</span>
+                                <img id="avatarImg" style="width: 100%; height: 100%; object-fit: cover; display: none;" alt="Avatar">
+                                <span id="avatarEmoji" style="display: none; font-size: 36px;">😊</span>
+                            </div>
+                            <div>
+                                <button class="btn-secondary" id="uploadAvatarBtn"><i class="fas fa-camera"></i> Subir foto</button>
+                                <button class="btn-secondary" id="removeAvatarBtn" style="margin-left: 8px;"><i class="fas fa-trash"></i></button>
+                                <input type="file" id="avatarFileInput" accept="image/*" style="display: none;">
+                                <div style="margin-top: 8px; font-size: 12px; color: var(--text-tertiary);">Formatos JPG, PNG. Máx. 100x100px</div>
+                            </div>
+                        </div>
+
+                        <!-- Color de fondo (solo visible si no hay foto ni stock) -->
+                        <div id="avatarBgColorContainer">
+                            <label class="form-label">Color de fondo</label>
+                            <input type="color" id="avatarBgColor" value="#0066FF" style="width: 60px; height: 36px; border: none; border-radius: 8px; cursor: pointer;">
+                        </div>
+
+                        <!-- Galería de avatares predefinidos -->
+                        <div style="margin-top: 20px;">
+                            <label class="form-label">Avatares predefinidos</label>
+                            <div id="stockAvatars" style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel Perfil -->
+                <div id="settings-panel-profile" class="settings-panel" style="display: none;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+                        <div class="form-group">
+                            <label class="form-label">Nombre</label>
+                            <input type="text" class="form-input" id="settingsNameInput">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Carrera / Especialidad</label>
+                            <input type="text" class="form-input" id="settingsRoleInput">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Iniciales (2 letras)</label>
+                            <input type="text" class="form-input" id="settingsInitialsInput" maxlength="2">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Curso / Año académico</label>
+                            <input type="text" class="form-input" id="settingsCourseInput" placeholder="Ej: 2º Ingeniería">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Meta semanal de estudio (horas)</label>
+                        <input type="number" class="form-input" id="settingsWeeklyGoal" min="0" max="100" step="1" style="width: 150px;">
+                    </div>
+                    <button class="btn-primary" id="saveProfileSettings" style="margin-top: 8px;">💾 Guardar perfil</button>
+                </div>
+
+                <!-- Panel Datos -->
+                <div id="settings-panel-data" class="settings-panel" style="display: none;">
+                    <p style="color: var(--text-secondary); margin-bottom: 20px;">Gestiona la copia de seguridad y el reinicio de tus datos.</p>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        <button class="btn-secondary" id="settingsExportBtn"><i class="fas fa-download"></i> Exportar</button>
+                        <button class="btn-secondary" id="settingsImportBtn"><i class="fas fa-upload"></i> Importar</button>
+                        <button class="btn-secondary" id="settingsClearBtn"><i class="fas fa-trash-alt"></i> Limpiar todo</button>
+                    </div>
+                </div>
             </div>
         </div>
     </main>
@@ -1645,18 +1787,6 @@ body.dragging-active {
         </div>
     </div>
     
-    <div class="modal-overlay" id="userModal">
-        <div class="modal">
-            <div class="modal-header"><h2 class="modal-title">Editar Perfil</h2><button class="modal-close" onclick="app.closeModal()"><i class="fas fa-times"></i></button></div>
-            <form id="userForm">
-                <div class="form-group"><label class="form-label">Nombre</label><input type="text" class="form-input" id="userNameInput" required></div>
-                <div class="form-group"><label class="form-label">Carrera</label><input type="text" class="form-input" id="userRoleInput" required></div>
-                <div class="form-group"><label class="form-label">Iniciales</label><input type="text" class="form-input" id="userInitialsInput" maxlength="2" required></div>
-                <div class="modal-actions"><button type="button" class="btn-secondary" onclick="app.closeModal()">Cancelar</button><button type="submit" class="btn-primary">Guardar</button></div>
-            </form>
-        </div>
-    </div>
-    
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
@@ -1779,12 +1909,281 @@ body.dragging-active {
             '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1',
             '#14B8A6', '#D946EF', '#EAB308', '#3B82F6', '#22C55E'
         ];
+
+        // ============================================
+        // STORAGE MANAGER - CAPA DE ABSTRACCIÓN
+        // Compatible con navegador (localStorage) y preparado para Electron (SQLite)
+        // ============================================
+
+        class StorageManager {
+            constructor() {
+                this.isElectron = (typeof process !== 'undefined' && 
+                                process.versions && 
+                                process.versions.electron);
+                this.db = null;
+                this.memoryCache = new Map(); // caché en memoria para acceso rápido
+                
+                if (this.isElectron) {
+                    this._initSQLite();
+                } else {
+                    this._initLocalStorage();
+                }
+            }
+            
+            // ========== INICIALIZACIÓN ==========
+            _initSQLite() {
+                try {
+                    const Database = require('better-sqlite3');
+                    const path = require('path');
+                    const { app } = require('electron');
+                    
+                    const dbPath = path.join(app.getPath('userData'), 'studyos.db');
+                    this.db = new Database(dbPath);
+                    
+                    // Crear tabla de almacenamiento clave-valor
+                    this.db.exec(`
+                        CREATE TABLE IF NOT EXISTS storage (
+                            key TEXT PRIMARY KEY,
+                            value TEXT NOT NULL,
+                            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                        )
+                    `);
+
+                    // ========== MIGRACIÓN AUTOMÁTICA DESDE LOCALSTORAGE ==========
+                    const keys = Object.keys(localStorage);
+                    if (keys.length > 0) {
+                        console.log(`Migrando ${keys.length} claves de localStorage a SQLite...`);
+                        keys.forEach(key => {
+                            const rawValue = localStorage.getItem(key);
+                            if (rawValue !== null) {
+                                // Guardar en SQLite usando el mismo método setItem (que serializa a JSON)
+                                try {
+                                    const parsed = JSON.parse(rawValue);
+                                    this.setItem(key, parsed);
+                                } catch {
+                                    // Si no es JSON, guardar como texto plano
+                                    this.setItem(key, rawValue);
+                                }
+                                // Eliminar del localStorage original para evitar duplicados
+                                localStorage.removeItem(key);
+                            }
+                        });
+                        console.log('Migración completada.');
+                    }
+                    // ========== FIN MIGRACIÓN ==========
+
+                } catch (e) {
+                    console.error('Error iniciando SQLite, usando localStorage de respaldo:', e);
+                    this.isElectron = false;
+                    this._initLocalStorage();
+                }
+            }
+            
+            _initLocalStorage() {
+                // localStorage ya está disponible en el navegador
+                console.log('StorageManager: usando localStorage');
+            }
+            
+            // ========== MÉTODOS CRUD ==========
+            getItem(key) {
+                // Intentar caché en memoria primero
+                if (this.memoryCache.has(key)) {
+                    return this.memoryCache.get(key);
+                }
+                
+                let value = null;
+                
+                if (this.isElectron && this.db) {
+                    const row = this.db.prepare('SELECT value FROM storage WHERE key = ?').get(key);
+                    value = row ? row.value : null;
+                } else {
+                    value = localStorage.getItem(key);
+                }
+                
+                // Parsear si es JSON
+                if (value) {
+                    try {
+                        const parsed = JSON.parse(value);
+                        this.memoryCache.set(key, parsed);
+                        return parsed;
+                    } catch (e) {
+                        return value;
+                    }
+                }
+                
+                return null;
+            }
+            
+            setItem(key, value) {
+                // Actualizar caché en memoria
+                this.memoryCache.set(key, value);
+                
+                // Serializar
+                const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+                
+                if (this.isElectron && this.db) {
+                    this.db.prepare('INSERT OR REPLACE INTO storage (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)').run(key, serialized);
+                } else {
+                    localStorage.setItem(key, serialized);
+                }
+            }
+            
+            removeItem(key) {
+                this.memoryCache.delete(key);
+                
+                if (this.isElectron && this.db) {
+                    this.db.prepare('DELETE FROM storage WHERE key = ?').run(key);
+                } else {
+                    localStorage.removeItem(key);
+                }
+            }
+            
+            clear() {
+                this.memoryCache.clear();
+                
+                if (this.isElectron && this.db) {
+                    this.db.exec('DELETE FROM storage');
+                } else {
+                    localStorage.clear();
+                }
+            }
+            
+            getAllKeys() {
+                if (this.isElectron && this.db) {
+                    const rows = this.db.prepare('SELECT key FROM storage').all();
+                    return rows.map(r => r.key);
+                } else {
+                    return Object.keys(localStorage);
+                }
+            }
+            
+            // ========== PARA ARCHIVOS BINARIOS (IndexedDB / Sistema de archivos) ==========
+            async saveFile(id, blob) {
+                if (this.isElectron) {
+                    // En Electron, guardar en sistema de archivos
+                    const fs = require('fs').promises;
+                    const path = require('path');
+                    const { app } = require('electron');
+                    
+                    const docsDir = path.join(app.getPath('userData'), 'documents');
+                    await fs.mkdir(docsDir, { recursive: true });
+                    const filePath = path.join(docsDir, id);
+                    
+                    const buffer = await blob.arrayBuffer();
+                    await fs.writeFile(filePath, Buffer.from(buffer));
+                    return filePath;
+                } else {
+                    // En navegador, guardar en IndexedDB
+                    return new Promise((resolve, reject) => {
+                        const request = indexedDB.open('StudyOSDocuments', 1);
+                        
+                        request.onupgradeneeded = (e) => {
+                            const db = e.target.result;
+                            if (!db.objectStoreNames.contains('files')) {
+                                db.createObjectStore('files', { keyPath: 'id' });
+                            }
+                        };
+                        
+                        request.onsuccess = (e) => {
+                            const db = e.target.result;
+                            const tx = db.transaction('files', 'readwrite');
+                            const store = tx.objectStore('files');
+                            store.put({ id, blob });
+                            tx.oncomplete = () => resolve();
+                            tx.onerror = () => reject(tx.error);
+                        };
+                        
+                        request.onerror = () => reject(request.error);
+                    });
+                }
+            }
+            
+            async getFile(id) {
+                if (this.isElectron) {
+                    const fs = require('fs').promises;
+                    const path = require('path');
+                    const { app } = require('electron');
+                    
+                    const filePath = path.join(app.getPath('userData'), 'documents', id);
+                    const buffer = await fs.readFile(filePath);
+                    return new Blob([buffer]);
+                } else {
+                    return new Promise((resolve, reject) => {
+                        const request = indexedDB.open('StudyOSDocuments', 1);
+                        
+                        request.onupgradeneeded = (e) => {
+                            const db = e.target.result;
+                            if (!db.objectStoreNames.contains('files')) {
+                                db.createObjectStore('files', { keyPath: 'id' });
+                            }
+                        };
+                        
+                        request.onsuccess = (e) => {
+                            const db = e.target.result;
+                            const tx = db.transaction('files', 'readonly');
+                            const store = tx.objectStore('files');
+                            const getRequest = store.get(id);
+                            
+                            getRequest.onsuccess = () => {
+                                resolve(getRequest.result?.blob || null);
+                            };
+                            getRequest.onerror = () => reject(getRequest.error);
+                        };
+                        
+                        request.onerror = () => reject(request.error);
+                    });
+                }
+            }
+            
+            async deleteFile(id) {
+                if (this.isElectron) {
+                    const fs = require('fs').promises;
+                    const path = require('path');
+                    const { app } = require('electron');
+                    
+                    const filePath = path.join(app.getPath('userData'), 'documents', id);
+                    try {
+                        await fs.unlink(filePath);
+                    } catch (e) {
+                        // El archivo puede no existir
+                    }
+                } else {
+                    return new Promise((resolve, reject) => {
+                        const request = indexedDB.open('StudyOSDocuments', 1);
+                        
+                        request.onsuccess = (e) => {
+                            const db = e.target.result;
+                            const tx = db.transaction('files', 'readwrite');
+                            const store = tx.objectStore('files');
+                            store.delete(id);
+                            tx.oncomplete = () => resolve();
+                            tx.onerror = () => reject(tx.error);
+                        };
+                        
+                        request.onerror = () => reject(request.error);
+                    });
+                }
+            }
+        }
         
         class StudyOSApp {
             constructor() {
+                // Crear el gestor de almacenamiento
+                this.storage = new StorageManager();
+                
                 this.data = {
                     tasks: [], subjects: [], exams: [], habits: [], objectives: [], schedules: [],
-                    user: { name: 'María Castro', role: 'Ingeniería Informática', initials: 'MC' } 
+                    documents: [], // nuevo array para metadatos de documentos
+                    user: { 
+                        name: 'María Castro', 
+                        role: 'Ingeniería Informática', 
+                        initials: 'MC',
+                        course: '',
+                        weeklyGoal: 20,
+                        avatarBgColor: '#0066FF',
+                        avatarImage: null,
+                        avatarStock: null
+                    }
                 };
                 // Filtros avanzados persistentes
                 this.activeFilters = {
@@ -1810,6 +2209,16 @@ body.dragging-active {
                 this.viewsDirty = {};
                 this.chartsNeedUpdate = false;
                 this.MAX_ITEMS_PER_LIST = 50;
+                this.stockAvatars = [
+                    { id: 'stock1', emoji: '🐱', bg: '#F59E0B' },
+                    { id: 'stock2', emoji: '🦊', bg: '#EF4444' },
+                    { id: 'stock3', emoji: '🐼', bg: '#10B981' },
+                    { id: 'stock4', emoji: '🐨', bg: '#8B5CF6' },
+                    { id: 'stock5', emoji: '🐸', bg: '#06B6D4' },
+                    { id: 'stock6', emoji: '🦁', bg: '#F97316' },
+                    { id: 'stock7', emoji: '🐙', bg: '#EC4899' },
+                    { id: 'stock8', emoji: '🐵', bg: '#6366F1' },
+                ];
                 
                 // Drag & Drop y estado temporal (sin duplicados)
                 this.draggedEventData = null;
@@ -1863,41 +2272,41 @@ body.dragging-active {
             getSubjectById(id) { return this.subjectIndex.get(id); }
             getExamById(id) { return this.examIndex.get(id); }
             
-            saveData() {
+           saveData() {
                 if (this.saveTimeout) clearTimeout(this.saveTimeout);
                 this.saveTimeout = setTimeout(() => {
-                    localStorage.setItem('studyos_pro_v6', JSON.stringify(this.data));
+                    this.storage.setItem('studyos_pro_v6', this.data);
                     this.saveTimeout = null;
                     this.chartsNeedUpdate = true;
                 }, 300);
             }
-            
+
             forceSave() {
                 if (this.saveTimeout) {
                     clearTimeout(this.saveTimeout);
                     this.saveTimeout = null;
                 }
-                localStorage.setItem('studyos_pro_v6', JSON.stringify(this.data));
+                this.storage.setItem('studyos_pro_v6', this.data);
             }
-            
+
             loadData() {
-                const saved = localStorage.getItem('studyos_pro_v6');
+                const saved = this.storage.getItem('studyos_pro_v6');
                 if (saved) { 
                     try { 
-                        this.data = { ...this.data, ...JSON.parse(saved) }; 
+                        this.data = { ...this.data, ...saved }; 
                         this.buildIndexes();
                     } catch (e) {
                         console.error('Error loading data:', e);
-                        this.data = { tasks: [], subjects: [], exams: [], habits: [], objectives: [], user: this.data.user };
+                        this.data = { tasks: [], subjects: [], exams: [], habits: [], objectives: [], schedules: [], user: this.data.user };
                     }
                 } else {
-                    const hasSeenApp = localStorage.getItem('studyos_has_seen_app');
+                    const hasSeenApp = this.storage.getItem('studyos_has_seen_app');
                     if (!hasSeenApp) {
                         this.initializeStockData();
-                        localStorage.setItem('studyos_has_seen_app', 'true');
+                        this.storage.setItem('studyos_has_seen_app', 'true');
                     } else {
                         this.data = {
-                            tasks: [], subjects: [], exams: [], habits: [], objectives: [], schedules: [],   // ← AÑADIR
+                            tasks: [], subjects: [], exams: [], habits: [], objectives: [], schedules: [],
                             user: this.data.user || { name: 'María Castro', role: 'Ingeniería Informática', initials: 'MC' }
                         };
                     }
@@ -2003,13 +2412,12 @@ body.dragging-active {
                 }
                 document.getElementById('addExamBtn')?.addEventListener('click', () => this.openExamModal());
                 document.getElementById('addObjectiveBtn')?.addEventListener('click', () => this.openObjectiveModal());
-                document.getElementById('userProfileBtn')?.addEventListener('click', () => this.openUserModal());
+                document.getElementById('userProfileBtn')?.addEventListener('click', () => this.switchView('settings'));
                 
                 document.getElementById('taskForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveTask(); });
                 document.getElementById('subjectForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveSubject(); });
                 document.getElementById('examForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveExam(); });
                 document.getElementById('objectiveForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveObjective(); });
-                document.getElementById('userForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveUser(); });
 
                 document.getElementById('scheduleForm').addEventListener('submit', (e) => {
                     e.preventDefault();
@@ -2033,10 +2441,6 @@ body.dragging-active {
                         this.renderPlanner();
                     });
                 });
-                
-                document.getElementById('exportDataBtn').addEventListener('click', () => this.exportData());
-                document.getElementById('importDataBtn').addEventListener('click', () => this.importData());
-                document.getElementById('clearDataBtn').addEventListener('click', () => this.clearAllData());
 
                 // ========== AÑADIR AQUÍ ==========
                 // Re-renderizar el planificador cuando se vuelve a la pestaña
@@ -2415,24 +2819,40 @@ body.dragging-active {
                     i.classList.remove('active');
                     if (i.dataset.view === viewId) i.classList.add('active');
                 });
-                const titles = { dashboard: 'Dashboard', planner: 'Planificador', tasks: 'Gestión de Tareas', subjects: 'Asignaturas', exams: 'Control de Exámenes', schedule: 'Horario Semanal', habits: 'Bitácora', objectives: 'Objetivos' };
+
+                // Títulos actualizados
+                const titles = {
+                    dashboard: 'Dashboard',
+                    planner: 'Planificador',
+                    tasks: 'Gestión de Tareas',
+                    subjects: 'Asignaturas',
+                    exams: 'Control de Exámenes',
+                    schedule: 'Horario Semanal',
+                    settings: 'Ajustes',        // ← Añadido
+                    habits: 'Bitácora',
+                    objectives: 'Objetivos'
+                };
                 document.getElementById('pageTitle').textContent = titles[viewId] || 'StudyOS';
                 this.currentView = viewId;
-                
-                // Insertar barra de filtros en las vistas que corresponda
+
+                // Vistas con filtros
                 if (viewId === 'tasks' || viewId === 'subjects' || viewId === 'exams' || viewId === 'schedule') {
                     this.insertFilterBar(viewId);
                     this.setupFilterListeners(viewId);
                     if (viewId === 'schedule') {
-                        this.renderSchedule();   // Forzar renderizado inmediato de la cuadrícula
+                        this.renderSchedule();
                     }
                 }
-                
+
+                // Vistas especiales
                 if (viewId === 'planner') {
                     if (!this.selectedDate) this.selectedDate = new Date();
                     this.currentPlannerDate = new Date(this.selectedDate);
                     this._scrollToToday = false;
                     this.renderPlanner();
+                } else if (viewId === 'settings') {
+                    this.renderSettings();
+                    this.setupSettingsListeners();
                 } else if (this.viewsDirty[viewId] || viewId === 'dashboard') {
                     this.renderView(viewId);
                     this.viewsDirty[viewId] = false;
@@ -5182,31 +5602,35 @@ body.dragging-active {
                     hideTooltip();
                 });
 
-                // ========== CLICK EN BLOQUE: MENÚ CONTEXTUAL (SIN CAMBIOS) ==========
-                document.querySelectorAll('.schedule-block').forEach(block => {
-                    block.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        const clickX = e.clientX;
-                        const clickY = e.clientY;
+                // ========== CLICK EN BLOQUE: MENÚ CONTEXTUAL ==========
+document.querySelectorAll('.schedule-block').forEach(block => {
+    block.addEventListener('click', (e) => {
+        e.stopPropagation();
 
-                        const blocks = document.querySelectorAll('.schedule-block');
-                        const overlappingBlocks = [];
+        // 🔹 Oculta el tooltip inmediatamente antes de mostrar el menú
+        hideTooltip();
 
-                        blocks.forEach(otherBlock => {
-                            const rect = otherBlock.getBoundingClientRect();
-                            if (
-                                clickX >= rect.left && clickX <= rect.right &&
-                                clickY >= rect.top && clickY <= rect.bottom
-                            ) {
-                                const id = otherBlock.dataset.scheduleId;
-                                const s = this.data.schedules.find(s => s.id === id);
-                                if (s) overlappingBlocks.push(s);
-                            }
-                        });
+        const clickX = e.clientX;
+        const clickY = e.clientY;
 
-                        this.showScheduleConflictSelector(overlappingBlocks, clickX, clickY);
-                    });
-                });
+        const blocks = document.querySelectorAll('.schedule-block');
+        const overlappingBlocks = [];
+
+        blocks.forEach(otherBlock => {
+            const rect = otherBlock.getBoundingClientRect();
+            if (
+                clickX >= rect.left && clickX <= rect.right &&
+                clickY >= rect.top && clickY <= rect.bottom
+            ) {
+                const id = otherBlock.dataset.scheduleId;
+                const s = this.data.schedules.find(s => s.id === id);
+                if (s) overlappingBlocks.push(s);
+            }
+        });
+
+        this.showScheduleConflictSelector(overlappingBlocks, clickX, clickY);
+    });
+});
             }
 
             showScheduleConflictSelector(blocks, x, y) {
@@ -5813,25 +6237,26 @@ body.dragging-active {
                                 
                                 try {
                                     // Guardar preferencias que NO deben borrarse
-                                    const hasSeenApp = localStorage.getItem('studyos_has_seen_app');
-                                    const savedTheme = localStorage.getItem('studyos_theme');
+                                    const hasSeenApp = this.storage.getItem('studyos_has_seen_app');
+                                    const savedTheme = this.storage.getItem('studyos_theme');
                                     const savedUser = { ...this.data.user };
                                     
-                                    // Limpiar localStorage
-                                    localStorage.clear();
+                                    // Limpiar TODO el almacenamiento (usa el StorageManager)
+                                    this.storage.clear();
                                     
                                     // Restaurar preferencias
-                                    if (hasSeenApp) localStorage.setItem('studyos_has_seen_app', hasSeenApp);
-                                    if (savedTheme) localStorage.setItem('studyos_theme', savedTheme);
+                                    if (hasSeenApp) this.storage.setItem('studyos_has_seen_app', hasSeenApp);
+                                    if (savedTheme) this.storage.setItem('studyos_theme', savedTheme);
                                     
-                                    // Reiniciar datos
+                                    // Reiniciar datos (sin serializar manualmente)
                                     this.data = {
                                         tasks: [],
                                         subjects: [],
                                         exams: [],
                                         habits: [],
                                         objectives: [],
-                                        schedules: [],      // <-- añadido
+                                        schedules: [],
+                                        documents: [],        // ← añadido para gestor documental
                                         user: savedUser
                                     };
                                     
@@ -5842,7 +6267,9 @@ body.dragging-active {
                                     if (this.examIndex) this.examIndex.clear();
                                     
                                     this.buildIndexes();
-                                    localStorage.setItem('studyos_pro_v6', JSON.stringify(this.data));
+                                    
+                                    // Guardar el nuevo estado limpio (StorageManager serializa solo)
+                                    this.storage.setItem('studyos_pro_v6', this.data);
                                     
                                     // Destruir gráficos existentes
                                     ['radar', 'doughnut', 'subjects', 'grades', 'habit'].forEach(chart => {
@@ -6063,14 +6490,7 @@ body.dragging-active {
                 }
                 modal.classList.add('active');
             }
-            
-            openUserModal() {
-                document.getElementById('userNameInput').value = this.data.user.name;
-                document.getElementById('userRoleInput').value = this.data.user.role;
-                document.getElementById('userInitialsInput').value = this.data.user.initials;
-                document.getElementById('userModal').classList.add('active');
-            }
-            
+                     
             closeModal() { 
                 document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
                 
@@ -6474,22 +6894,34 @@ body.dragging-active {
                 this.showToast(id ? 'Objetivo actualizado' : 'Objetivo creado', 'success');
             }
             
-            saveUser() {
-                this.data.user = {
-                    name: document.getElementById('userNameInput').value,
-                    role: document.getElementById('userRoleInput').value,
-                    initials: document.getElementById('userInitialsInput').value.toUpperCase()
-                };
-                this.saveData();
-                this.updateUserDisplay();
-                this.closeModal();
-                this.showToast('Perfil actualizado', 'success');
-            }
-            
             updateUserDisplay() {
                 document.getElementById('userNameDisplay').textContent = this.data.user.name;
                 document.getElementById('userRoleDisplay').textContent = this.data.user.role;
-                document.getElementById('userAvatar').textContent = this.data.user.initials;
+                const avatarEl = document.getElementById('userAvatar');
+                if (!avatarEl) return;
+
+                // Limpiar estilos
+                avatarEl.style.backgroundImage = '';
+                avatarEl.style.backgroundSize = '';
+                avatarEl.style.backgroundPosition = '';
+                avatarEl.textContent = '';
+
+                if (this.data.user.avatarImage) {
+                    avatarEl.style.backgroundImage = `url(${this.data.user.avatarImage})`;
+                    avatarEl.style.backgroundSize = 'cover';
+                    avatarEl.style.backgroundPosition = 'center';
+                } else if (this.data.user.avatarStock) {
+                    const stock = this.stockAvatars.find(s => s.id === this.data.user.avatarStock);
+                    if (stock) {
+                        avatarEl.textContent = stock.emoji;
+                        avatarEl.style.background = stock.bg;
+                        avatarEl.style.fontSize = '24px'; // para que el emoji se vea bien
+                    }
+                } else {
+                    avatarEl.textContent = this.data.user.initials;
+                    avatarEl.style.background = this.data.user.avatarBgColor || '#0066FF';
+                    avatarEl.style.fontSize = '18px'; // tamaño normal para iniciales
+                }
             }
             
             deleteTask(id) { 
@@ -6760,15 +7192,329 @@ body.dragging-active {
             }
             
             setupTheme() {
-                const toggle = document.getElementById('themeToggle'), icon = toggle.querySelector('i');
-                if (localStorage.getItem('studyos_theme') === 'dark') { document.body.classList.add('dark'); icon.classList.remove('fa-moon'); icon.classList.add('fa-sun'); }
-                toggle.addEventListener('click', () => {
-                    document.body.classList.toggle('dark');
-                    const isDark = document.body.classList.contains('dark');
-                    icon.classList.remove(isDark ? 'fa-moon' : 'fa-sun'); icon.classList.add(isDark ? 'fa-sun' : 'fa-moon');
-                    localStorage.setItem('studyos_theme', isDark ? 'dark' : 'light');
-                    setTimeout(() => { this.updateRadarChart(); this.updateDoughnutChart(); this.updateSubjectsChart(); this.updateGradesChart(); this.updateHabitChart(); }, 100);
+                const savedTheme = this.storage.getItem('studyos_theme') || 'light';
+                const savedAccent = this.storage.getItem('studyos_accent') || '#0066FF';
+                document.documentElement.style.setProperty('--primary', savedAccent);
+                this.applyTheme(savedTheme);
+
+                // Detectar cambios en la preferencia del sistema operativo
+                this.systemThemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+                this.systemThemeMedia.addEventListener('change', () => {
+                    const currentTheme = this.storage.getItem('studyos_theme');
+                    if (currentTheme === 'system') {
+                        this.applyTheme('system');
+                    }
                 });
+            }
+
+            applyTheme(theme) {
+                const isDark = (theme === 'dark') || 
+                            (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                document.body.classList.toggle('dark', isDark);
+                this.storage.setItem('studyos_theme', theme);
+            }
+
+            setAccentColor(color) {
+                document.documentElement.style.setProperty('--primary', color);
+                this.storage.setItem('studyos_accent', color);
+                // Actualizar el avatar preview si no tiene imagen
+                const preview = document.getElementById('avatarPreview');
+                if (preview && this.data.user && !this.data.user.avatarImage) {
+                    preview.style.backgroundColor = color;
+                }
+            }
+
+            renderSettings() {
+                const user = this.data.user;
+                this.switchSettingsTab('appearance');
+
+                // Configurar listeners una sola vez
+                this.setupSettingsListeners();
+
+                // Apariencia
+                document.getElementById('themeSelect').value = this.storage.getItem('studyos_theme') || 'light';
+                const savedAccent = this.storage.getItem('studyos_accent') || '#0066FF';
+                document.getElementById('accentColorInput').value = savedAccent;
+                document.getElementById('accentColorText').value = savedAccent;
+                this.setupAccentColorPicker();
+
+                // Avatar
+                this.updateAvatarPreview();
+                this.renderStockAvatars();
+
+                // Perfil
+                document.getElementById('settingsNameInput').value = user.name || '';
+                document.getElementById('settingsRoleInput').value = user.role || '';
+                document.getElementById('settingsInitialsInput').value = user.initials || '';
+                document.getElementById('settingsCourseInput').value = user.course || '';
+                document.getElementById('settingsWeeklyGoal').value = user.weeklyGoal || 20;
+
+                this.toggleAvatarBgColor();
+            }
+
+            setupAccentColorPicker() {
+                const container = document.getElementById('accentColorPicker');
+                if (!container) return;
+                container.innerHTML = '';
+                const colors = ['#0066FF', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
+                const savedAccent = this.storage.getItem('studyos_accent') || '#0066FF';
+                colors.forEach(color => {
+                    const opt = document.createElement('div');
+                    opt.className = 'color-option';
+                    opt.style.backgroundColor = color;
+                    opt.dataset.color = color;
+                    opt.addEventListener('click', () => {
+                        document.querySelectorAll('#accentColorPicker .color-option').forEach(o => o.classList.remove('selected'));
+                        opt.classList.add('selected');
+                        document.getElementById('accentColorInput').value = color;
+                        document.getElementById('accentColorText').value = color;
+                        this.setAccentColor(color);
+                    });
+                    if (color === savedAccent) opt.classList.add('selected');
+                    container.appendChild(opt);
+                });
+
+                const accentInput = document.getElementById('accentColorInput');
+                const accentText = document.getElementById('accentColorText');
+                accentInput?.addEventListener('input', (e) => {
+                    const color = e.target.value;
+                    accentText.value = color;
+                    this.setAccentColor(color);
+                    document.querySelectorAll('#accentColorPicker .color-option').forEach(o => o.classList.remove('selected'));
+                });
+                accentText?.addEventListener('change', (e) => {
+                    const color = e.target.value;
+                    if (this.isValidHexColor(color)) {
+                        this.setAccentColor(color);
+                        accentInput.value = color;
+                        document.querySelectorAll('#accentColorPicker .color-option').forEach(o => o.classList.remove('selected'));
+                    }
+                });
+            }
+
+            renderStockAvatars() {
+                const container = document.getElementById('stockAvatars');
+                if (!container) return;
+                container.innerHTML = '';
+                const currentStock = this.data.user.avatarStock;
+                this.stockAvatars.forEach(stock => {
+                    const div = document.createElement('div');
+                    div.className = 'stock-avatar-item';
+                    div.style.cssText = `
+                        width: 50px; height: 50px; border-radius: 50%;
+                        background: ${stock.bg};
+                        display: flex; align-items: center; justify-content: center;
+                        font-size: 24px; cursor: pointer;
+                        transition: transform 0.2s, box-shadow 0.2s;
+                        border: 2px solid transparent;
+                    `;
+                    div.innerHTML = stock.emoji;
+                    if (currentStock === stock.id) {
+                        div.style.border = '2px solid var(--primary)';
+                        div.style.boxShadow = '0 0 0 3px rgba(0,102,255,0.3)';
+                    }
+                    div.addEventListener('click', () => {
+                        this.data.user.avatarStock = stock.id;
+                        this.data.user.avatarImage = null;
+                        this.applyAvatarState();
+                        this.saveData();
+                        this.updateUserDisplay();
+                        // Resaltar visualmente el seleccionado
+                        document.querySelectorAll('.stock-avatar-item').forEach(el => el.style.border = '2px solid transparent');
+                        div.style.border = '2px solid var(--primary)';
+                        div.style.boxShadow = '0 0 0 3px rgba(0,102,255,0.3)';
+                    });
+                    container.appendChild(div);
+                });
+
+                // Botón para quitar avatar stock y volver a iniciales
+                const clearBtn = document.createElement('button');
+                clearBtn.className = 'btn-secondary';
+                clearBtn.innerHTML = '<i class="fas fa-times"></i> Ninguno';
+                clearBtn.style.cssText = 'margin-left: 8px; align-self: center;';
+                clearBtn.addEventListener('click', () => {
+                    this.data.user.avatarStock = null;
+                    this.applyAvatarState();
+                    this.saveData();
+                    this.updateUserDisplay();
+                    document.querySelectorAll('.stock-avatar-item').forEach(el => el.style.border = '2px solid transparent');
+                });
+                container.appendChild(clearBtn);
+            }
+
+            toggleAvatarBgColor() {
+                const container = document.getElementById('avatarBgColorContainer');
+                if (!container) return;
+                const hasImage = !!this.data.user.avatarImage;
+                const hasStock = !!this.data.user.avatarStock;
+                container.style.display = (hasImage || hasStock) ? 'none' : 'block';
+            }
+
+            updateAvatarPreview() {
+                const user = this.data.user;
+                const initialsEl = document.getElementById('avatarInitials');
+                const imgEl = document.getElementById('avatarImg');
+                const emojiEl = document.getElementById('avatarEmoji');
+                const preview = document.getElementById('avatarPreview');
+                if (!preview) return;
+
+                // Ocultar todos
+                initialsEl.style.display = 'none';
+                imgEl.style.display = 'none';
+                emojiEl.style.display = 'none';
+
+                if (user.avatarImage) {
+                    imgEl.src = user.avatarImage;
+                    imgEl.style.display = 'block';
+                } else if (user.avatarStock) {
+                    const stock = this.stockAvatars.find(s => s.id === user.avatarStock);
+                    if (stock) {
+                        emojiEl.textContent = stock.emoji;
+                        emojiEl.style.display = 'block';
+                        preview.style.backgroundColor = stock.bg;
+                    }
+                } else {
+                    // Iniciales
+                    initialsEl.textContent = user.initials || '??';
+                    initialsEl.style.display = 'block';
+                    preview.style.backgroundColor = user.avatarBgColor || '#0066FF';
+                }
+                if (!user.avatarStock && !user.avatarImage) {
+                    preview.style.backgroundColor = user.avatarBgColor || '#0066FF';
+                }
+            }
+
+            switchSettingsTab(tabId) {
+                // Activar botón
+                document.querySelectorAll('.settings-tab').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.tab === tabId);
+                });
+                // Mostrar panel correspondiente
+                document.querySelectorAll('.settings-panel').forEach(panel => {
+                    panel.style.display = panel.id === `settings-panel-${tabId}` ? 'block' : 'none';
+                });
+            }
+
+            setupSettingsListeners() {
+                // Si ya hemos configurado los listeners, no volver a hacerlo
+                if (this._settingsListenersSetup) return;
+                this._settingsListenersSetup = true;
+
+                // Referencias a elementos (no se reemplazarán)
+                const themeSelect = document.getElementById('themeSelect');
+                const accentInput = document.getElementById('accentColorInput');
+                const accentText = document.getElementById('accentColorText');
+                const uploadBtn = document.getElementById('uploadAvatarBtn');
+                const removeBtn = document.getElementById('removeAvatarBtn');
+                const fileInput = document.getElementById('avatarFileInput');
+                const avatarBgColor = document.getElementById('avatarBgColor');
+                const saveProfileBtn = document.getElementById('saveProfileSettings');
+                const exportBtn = document.getElementById('settingsExportBtn');
+                const importBtn = document.getElementById('settingsImportBtn');
+                const clearBtn = document.getElementById('settingsClearBtn');
+
+                // Pestañas
+                document.querySelectorAll('.settings-tab').forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        this.switchSettingsTab(tab.dataset.tab);
+                    });
+                });
+
+                // Tema
+                themeSelect?.addEventListener('change', e => this.applyTheme(e.target.value));
+
+                // Acento
+                accentInput?.addEventListener('input', e => {
+                    accentText.value = e.target.value;
+                    this.setAccentColor(e.target.value);
+                    document.querySelectorAll('#accentColorPicker .color-option').forEach(o => o.classList.remove('selected'));
+                });
+                accentText?.addEventListener('change', e => {
+                    const color = e.target.value;
+                    if (this.isValidHexColor(color)) {
+                        this.setAccentColor(color);
+                        accentInput.value = color;
+                        document.querySelectorAll('#accentColorPicker .color-option').forEach(o => o.classList.remove('selected'));
+                    }
+                });
+
+                // Subir avatar
+                uploadBtn?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    fileInput?.click();
+                });
+
+                fileInput?.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = 100;
+                            canvas.height = 100;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, 100, 100);
+                            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                            this.data.user.avatarImage = dataUrl;
+                            this.data.user.avatarStock = null;   // quitar stock
+                            this.applyAvatarState();              // método centralizado
+                            this.saveData();
+                            this.updateUserDisplay();
+                        };
+                        img.src = ev.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                    // Limpiar el input para permitir volver a seleccionar el mismo archivo
+                    e.target.value = '';
+                });
+
+                // Eliminar foto
+                removeBtn?.addEventListener('click', () => {
+                    this.data.user.avatarImage = null;
+                    this.applyAvatarState();
+                    this.saveData();
+                    this.updateUserDisplay();
+                });
+
+                // Color de fondo del avatar
+                avatarBgColor?.addEventListener('input', (e) => {
+                    this.data.user.avatarBgColor = e.target.value;
+                    if (!this.data.user.avatarImage && !this.data.user.avatarStock) {
+                        this.updateAvatarPreview();
+                    }
+                    this.saveData();
+                    this.updateUserDisplay();
+                });
+
+                // Guardar perfil
+                saveProfileBtn?.addEventListener('click', () => {
+                    this.data.user.name = document.getElementById('settingsNameInput').value.trim();
+                    this.data.user.role = document.getElementById('settingsRoleInput').value.trim();
+                    this.data.user.initials = document.getElementById('settingsInitialsInput').value.trim().toUpperCase() || '??';
+                    this.data.user.course = document.getElementById('settingsCourseInput').value.trim();
+                    this.data.user.weeklyGoal = parseInt(document.getElementById('settingsWeeklyGoal').value) || 20;
+                    this.saveData();
+                    this.updateUserDisplay();
+                    if (!this.data.user.avatarImage && !this.data.user.avatarStock) {
+                        this.updateAvatarPreview();
+                    }
+                    this.showToast('Perfil guardado', 'success');
+                });
+
+                // Datos
+                exportBtn?.addEventListener('click', () => this.exportData());
+                importBtn?.addEventListener('click', () => this.importData());
+                clearBtn?.addEventListener('click', () => this.clearAllData());
+            }
+
+            applyAvatarState() {
+                this.updateAvatarPreview();
+                this.toggleAvatarBgColor();
+                // Quitar selección visual de todos los stocks
+                document.querySelectorAll('.stock-avatar-item').forEach(el => el.style.border = '2px solid transparent');
+                // Si no hay imagen ni stock, no hay que hacer nada más
             }
 
             hexToRgba(hex, opacity) {
