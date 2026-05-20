@@ -55,15 +55,43 @@
 }
 
 body.dark {
-    --bg-primary: #0F172A;
-    --bg-secondary: #1E293B;
-    --bg-tertiary: #334155;
-    --bg-card: rgba(30, 41, 59, 0.95);
-    --text-primary: #F1F5F9;
-    --text-secondary: #CBD5E1;
-    --text-tertiary: #64748B;
-    --border-light: #334155;
-    --border-medium: #475569;
+    --bg-primary: #0a0e14;
+    --bg-secondary: #11161e;
+    --bg-tertiary: #1a202a;
+    --bg-card: rgba(18, 23, 32, 0.95);
+
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-tertiary: #64748b;
+
+    --border-light: #2d3748;
+    --border-medium: #4a5568;
+
+    --primary: #4dabf7;
+    --primary-light: rgba(77, 171, 247, 0.15);
+    --primary-dark: #339af0;
+
+    --success: #69db7c;
+    --warning: #ffd43b;
+    --danger: #ff6b6b;
+    --info: #4dabf7;
+    --purple: #9775fa;
+
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 8px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 16px rgba(0,0,0,0.5);
+    --shadow-xl: 0 12px 24px rgba(0,0,0,0.6);
+}
+
+/* Ajustes profesionales para gráficos en tema oscuro */
+body.dark canvas {
+    --chart-grid-color: rgba(148, 163, 184, 0.15);  /* líneas de cuadrícula casi imperceptibles */
+    --chart-text-color: #94a3b8;                    /* color de etiquetas */
+}
+
+/* Afecta a las etiquetas de los ejes y leyendas de Chart.js */
+body.dark .chartjs-render-monitor {
+    filter: none !important; /* elimina posibles filtros automáticos */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -111,8 +139,37 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
     background: linear-gradient(135deg, var(--text-primary), var(--primary));
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; white-space: nowrap;
 }
+/* Menú lateral: scroll invisible por defecto, visible al pasar el ratón */
+.nav-menu {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 4px;
+    margin-bottom: 8px;
 
-.nav-menu { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+    /* Scroll invisible por defecto */
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* IE/Edge */
+}
+
+/* WebKit: barra invisible por defecto, visible al pasar el ratón */
+.nav-menu::-webkit-scrollbar {
+    width: 6px;
+    background: transparent;
+}
+.nav-menu::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 10px;
+}
+.nav-menu:hover::-webkit-scrollbar-thumb {
+    background: var(--border-medium);
+}
+.nav-menu:hover::-webkit-scrollbar-thumb:hover {
+    background: var(--text-tertiary);
+}
 .nav-item {
     display: flex; align-items: center; gap: 14px; padding: 14px 16px;
     border-radius: var(--radius-md); color: var(--text-secondary); font-weight: 500;
@@ -643,8 +700,52 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
 /* ----- Modales ----- */
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.3s; }
 .modal-overlay.active { opacity: 1; visibility: visible; }
-.modal { background: var(--bg-card); backdrop-filter: blur(20px); border-radius: var(--radius-2xl); padding: 36px; width: 520px; max-width: 90%; max-height: 90vh; overflow-y: auto; border: 1px solid var(--border-light); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); transform: scale(0.9); transition: transform 0.3s; }
+
+.modal {
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    border-radius: var(--radius-2xl);
+    padding: 36px;
+    width: 520px;
+    max-width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    border: 1px solid var(--border-light);
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+    transform: scale(0.9);
+    transition: transform 0.3s;
+
+    /* Firefox: scroll invisible hasta hover */
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    padding-right: 14px;
+}
 .modal-overlay.active .modal { transform: scale(1); }
+.modal:hover { scrollbar-color: var(--border-medium) transparent; }
+
+/* Scroll personalizado para modales (anula el global) */
+.modal::-webkit-scrollbar {
+    width: 6px !important;
+}
+.modal::-webkit-scrollbar-track {
+    background: transparent !important;
+    /* Truco con bordes transparentes para acortar la barra */
+    border-top: 32px solid transparent;
+    border-bottom: 32px solid transparent;
+    background-clip: padding-box;   /* evita que el thumb se pinte sobre los bordes */
+}
+.modal::-webkit-scrollbar-thumb {
+    background: transparent !important;
+    border-radius: 10px;
+    transition: background 0.3s ease;
+}
+.modal:hover::-webkit-scrollbar-thumb {
+    background: var(--border-medium) !important;
+}
+.modal::-webkit-scrollbar-thumb:hover {
+    background: var(--text-tertiary) !important;
+}
+
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
 .modal-title { font-size: 24px; font-weight: 700; font-family: 'Manrope', sans-serif; }
 .modal-close { width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 1.2rem; cursor: pointer; }
@@ -657,7 +758,6 @@ input, select, textarea { font-family: 'Inter', sans-serif; }
 .modal-actions button { flex: 1; padding: 14px; border-radius: 40px; font-weight: 600; cursor: pointer; }
 .expandable-textarea { width: 100%; padding: 14px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-light); background: var(--bg-secondary); color: var(--text-primary); font-size: 14px; resize: vertical; min-height: 80px; max-height: 300px; font-family: 'Inter', sans-serif; transition: all 0.2s; outline: none; }
 .expandable-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1); }
-
 /* ----- Color Picker ----- */
 .color-picker-container { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .color-option { width: 36px; height: 36px; border-radius: var(--radius-md); cursor: pointer; border: 2px solid transparent; transition: all 0.2s; }
@@ -1110,6 +1210,139 @@ body.dragging-active {
     display: none !important;
 }
 
+/* ===== GESTOR DE DOCUMENTOS ===== */
+.document-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    min-height: 140px;
+}
+.document-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+.document-card i {
+    font-size: 32px;
+    margin-bottom: 8px;
+}
+.doc-icon-pdf { color: #EF4444; }
+.doc-icon-image { color: #8B5CF6; }
+.doc-icon-note { color: #10B981; }
+.document-card .doc-title {
+    font-weight: 500;
+    font-size: 14px;
+    margin-bottom: 4px;
+    word-break: break-word;
+    line-height: 1.3;
+}
+.document-card .doc-meta {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-top: auto;
+}
+.document-card .doc-actions {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    display: none;
+    gap: 4px;
+}
+.document-card:hover .doc-actions {
+    display: flex;
+}
+
+/* Contenedor interno del modal de vista previa de documentos */
+#previewModalContent {
+    flex: 1 1 0%;         /* crece para ocupar todo el espacio disponible */
+    min-height: 0;        /* evita que se salga del modal */
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#previewModalContent img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: var(--radius-md);
+}
+#previewModalContent iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: var(--radius-md);
+}
+#previewModalContent .note-content {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+    font-family: 'Inter', sans-serif;
+    line-height: 1.6;
+    padding: 20px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+#documentPreviewModal .modal {
+    height: 90vh;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;  /* ← antes era 36px, ahora menos margen */
+}
+
+/* Unificar estética del scroll en paneles secundarios (popover, etc.) si lo deseas */
+.day-popover-events-container,
+.trello-column-body,
+.task-list,
+.exam-timeline {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-medium) transparent;
+}
+
+/* Botones de selección de tema */
+.theme-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 20px 16px;
+    background: var(--bg-card);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+}
+.theme-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+.theme-btn.active {
+    background: var(--primary-light);
+    border-color: var(--primary);
+    color: var(--primary);
+    font-weight: 600;
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.2);
+}
+
 </style>
 
 </head>
@@ -1140,10 +1373,9 @@ body.dragging-active {
             <button class="nav-item" data-view="schedule">
                 <i class="fas fa-clock"></i><span>Horarios</span>
             </button>
-            <button class="nav-item" data-view="settings">
-                <i class="fas fa-cog"></i><span>Ajustes</span>
-            </button>
-                        
+            <button class="nav-item" data-view="documents">
+                <i class="fas fa-folder-open"></i><span>Documentos</span>
+            </button>          
             <div class="nav-divider"><span>Análisis</span></div>
             
             <button class="nav-item" data-view="habits">
@@ -1151,6 +1383,11 @@ body.dragging-active {
             </button>
             <button class="nav-item" data-view="objectives">
                 <i class="fas fa-flag"></i><span>Objetivos</span>
+            </button>
+
+            <div class="nav-divider"><span>Ajustes</span></div>
+            <button class="nav-item" data-view="settings">
+                <i class="fas fa-cog"></i><span>Ajustes</span>
             </button>
         </nav>
         
@@ -1417,9 +1654,92 @@ body.dragging-active {
             </div>
         </div>
 
+        <!-- Documents View -->
+        <div id="documents-view" class="view-panel hidden">
+            <div class="card" style="display: flex; flex-direction: column; height: 100%;">
+                <div class="card-header">
+                    <h3 class="card-title">📁 Gestor de Documentos</h3>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <span id="docStorageInfo" style="font-size: 12px; color: var(--text-tertiary);"></span>
+                        <button class="btn-primary" id="addDocumentBtn">
+                            <i class="fas fa-plus"></i> Subir / Nueva Nota
+                        </button>
+                    </div>
+                </div>
+                <!-- Filtros -->
+                <div class="filter-bar" id="documentsFilterBarContainer"></div>
+                <!-- Lista de documentos (ocupa todo el ancho) -->
+                <div id="documentsList" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; align-content: start; padding: 4px;">
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal para subir documento / crear nota -->
+        <div class="modal-overlay" id="documentModal">
+            <div class="modal" style="width: 480px;">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="documentModalTitle">Subir Documento</h2>
+                    <button class="modal-close" onclick="app.closeModal()"><i class="fas fa-times"></i></button>
+                </div>
+                <form id="documentForm">
+                    <input type="hidden" id="documentId">
+                    <div class="form-group">
+                        <label class="form-label">Tipo</label>
+                        <select class="form-select" id="documentTypeSelect">
+                            <option value="file">📄 Archivo (PDF, imagen)</option>
+                            <option value="note">📝 Nota de texto</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="docFileGroup">
+                        <label class="form-label">Archivo</label>
+                        <input type="file" class="form-input" id="documentFileInput" accept=".pdf,image/*">
+                    </div>
+                    <div class="form-group" id="docNoteGroup" style="display: none;">
+                        <label class="form-label">Contenido de la nota</label>
+                        <textarea class="form-textarea" id="documentNoteInput" rows="8" placeholder="Escribe tus apuntes..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Asignatura</label>
+                        <select class="form-select" id="documentSubjectSelect" required></select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-secondary" onclick="app.closeModal()">Cancelar</button>
+                        <button type="submit" class="btn-primary">Guardar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal de Vista Previa de Documento -->
+        <div class="modal-overlay" id="documentPreviewModal">
+            <div class="modal" style="width: 95vw; height: 90vh; max-width: 1400px;">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="previewModalTitle">Documento</h2>
+                    <button class="modal-close" onclick="app.closeDocumentPreview()"><i class="fas fa-times"></i></button>
+                </div>
+                <div id="previewModalContent" style="flex: 1; overflow: auto; min-height: 0; display: flex; align-items: center; justify-content: center;">
+                    <!-- Se llenará dinámicamente -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Vista Ampliada del Avatar -->
+        <div class="modal-overlay" id="avatarViewModal">
+            <div class="modal" style="width: 80vw; max-width: 700px; height: 80vh; padding: 20px; display: flex; flex-direction: column;">
+                <div class="modal-header">
+                    <h2 class="modal-title">Avatar</h2>
+                    <button class="modal-close" onclick="app.closeAvatarView()"><i class="fas fa-times"></i></button>
+                </div>
+                <!-- Contenedor centrado con id -->
+                <div id="avatarViewContainer" style="flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                    <img id="avatarViewImage" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 12px;" alt="">
+                </div>
+            </div>
+        </div>
+
         <!-- Settings View -->
         <div id="settings-view" class="view-panel hidden">
-            <div class="card" style="padding: 28px; max-width: 850px; margin: 0 auto;">
+            <div class="card" style="padding: 28px;">
                 <h2 style="margin-bottom: 24px;">⚙️ Ajustes</h2>
 
                 <!-- Pestañas de navegación -->
@@ -1435,11 +1755,20 @@ body.dragging-active {
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
                             <div>
                                 <label class="form-label">Tema</label>
-                                <select class="form-select" id="themeSelect">
-                                    <option value="light">Claro</option>
-                                    <option value="dark">Oscuro</option>
-                                    <option value="system">Sistema</option>
-                                </select>
+                                <div style="display: flex; gap: 12px; margin-top: 8px;">
+                                    <button type="button" class="theme-btn" data-theme="light">
+                                        <i class="fas fa-sun" style="font-size: 24px;"></i>
+                                        <span>Claro</span>
+                                    </button>
+                                    <button type="button" class="theme-btn" data-theme="dark">
+                                        <i class="fas fa-moon" style="font-size: 24px;"></i>
+                                        <span>Oscuro</span>
+                                    </button>
+                                    <button type="button" class="theme-btn" data-theme="system">
+                                        <i class="fas fa-desktop" style="font-size: 24px;"></i>
+                                        <span>Sistema</span>
+                                    </button>
+                                </div>
                             </div>
                             <div>
                                 <label class="form-label">Color de acento</label>
@@ -1461,11 +1790,10 @@ body.dragging-active {
                                 <img id="avatarImg" style="width: 100%; height: 100%; object-fit: cover; display: none;" alt="Avatar">
                                 <span id="avatarEmoji" style="display: none; font-size: 36px;">😊</span>
                             </div>
-                            <div>
+                            <div style="display: flex; align-items: center;">
                                 <button class="btn-secondary" id="uploadAvatarBtn"><i class="fas fa-camera"></i> Subir foto</button>
                                 <button class="btn-secondary" id="removeAvatarBtn" style="margin-left: 8px;"><i class="fas fa-trash"></i></button>
                                 <input type="file" id="avatarFileInput" accept="image/*" style="display: none;">
-                                <div style="margin-top: 8px; font-size: 12px; color: var(--text-tertiary);">Formatos JPG, PNG. Máx. 100x100px</div>
                             </div>
                         </div>
 
@@ -2182,6 +2510,7 @@ body.dragging-active {
                         weeklyGoal: 20,
                         avatarBgColor: '#0066FF',
                         avatarImage: null,
+                        avatarImageLarge: null,   // ← nuevo
                         avatarStock: null
                     }
                 };
@@ -2231,6 +2560,7 @@ body.dragging-active {
                 this._currentDisplayEvents = null;
                 this._activeDragState = null;
                 this._scrollToToday = false;   // <-- NUEVA LÍNEA
+                this._documentsFiltersReady = false;
                 this.selectedDate = new Date(); // por defecto, hoy
                 this._justDragged = false;   // bandera para bloquear clicks tras arrastre
                 
@@ -2424,6 +2754,19 @@ body.dragging-active {
                     this.saveSchedule();
                 });
                 document.getElementById('addScheduleBtn')?.addEventListener('click', () => this.openScheduleModal());
+
+                document.getElementById('addDocumentBtn')?.addEventListener('click', () => this.openDocumentModal());
+                document.getElementById('documentForm')?.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.saveDocument();
+                });
+
+                // Cambio de tipo en el modal
+                document.getElementById('documentTypeSelect')?.addEventListener('change', (e) => {
+                    const isNote = e.target.value === 'note';
+                    document.getElementById('docFileGroup').style.display = isNote ? 'none' : 'block';
+                    document.getElementById('docNoteGroup').style.display = isNote ? 'block' : 'none';
+                });
                 
                 document.getElementById('saveStudySession')?.addEventListener('click', () => this.saveStudySession());
                 document.getElementById('habitEditForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveEditedHabit(); });
@@ -2844,6 +3187,15 @@ body.dragging-active {
                     }
                 }
 
+                // NUEVO: para documentos, solo insertamos la barra y configuramos los listeners una vez
+                if (viewId === 'documents') {
+                    if (!this._documentsFiltersReady) {
+                        this.insertDocumentsFilterBar();
+                        this._documentsFiltersReady = true;
+                    }
+                    this.renderDocuments();
+                }
+
                 // Vistas especiales
                 if (viewId === 'planner') {
                     if (!this.selectedDate) this.selectedDate = new Date();
@@ -2856,6 +3208,8 @@ body.dragging-active {
                 } else if (this.viewsDirty[viewId] || viewId === 'dashboard') {
                     this.renderView(viewId);
                     this.viewsDirty[viewId] = false;
+                }else if (viewId === 'documents') {
+                    this.renderDocuments();
                 }
             }
             
@@ -2869,6 +3223,7 @@ body.dragging-active {
                     case 'schedule': this.renderSchedule(); break;   // ← AÑADIR
                     case 'habits': this.renderHabits(); break;
                     case 'objectives': this.renderObjectives(); break;
+                    case 'documents': this.renderDocuments(); break;
                 }
             }
             
@@ -5603,34 +5958,34 @@ body.dragging-active {
                 });
 
                 // ========== CLICK EN BLOQUE: MENÚ CONTEXTUAL ==========
-document.querySelectorAll('.schedule-block').forEach(block => {
-    block.addEventListener('click', (e) => {
-        e.stopPropagation();
+                document.querySelectorAll('.schedule-block').forEach(block => {
+                    block.addEventListener('click', (e) => {
+                        e.stopPropagation();
 
-        // 🔹 Oculta el tooltip inmediatamente antes de mostrar el menú
-        hideTooltip();
+                        // 🔹 Oculta el tooltip inmediatamente antes de mostrar el menú
+                        hideTooltip();
 
-        const clickX = e.clientX;
-        const clickY = e.clientY;
+                        const clickX = e.clientX;
+                        const clickY = e.clientY;
 
-        const blocks = document.querySelectorAll('.schedule-block');
-        const overlappingBlocks = [];
+                        const blocks = document.querySelectorAll('.schedule-block');
+                        const overlappingBlocks = [];
 
-        blocks.forEach(otherBlock => {
-            const rect = otherBlock.getBoundingClientRect();
-            if (
-                clickX >= rect.left && clickX <= rect.right &&
-                clickY >= rect.top && clickY <= rect.bottom
-            ) {
-                const id = otherBlock.dataset.scheduleId;
-                const s = this.data.schedules.find(s => s.id === id);
-                if (s) overlappingBlocks.push(s);
-            }
-        });
+                        blocks.forEach(otherBlock => {
+                            const rect = otherBlock.getBoundingClientRect();
+                            if (
+                                clickX >= rect.left && clickX <= rect.right &&
+                                clickY >= rect.top && clickY <= rect.bottom
+                            ) {
+                                const id = otherBlock.dataset.scheduleId;
+                                const s = this.data.schedules.find(s => s.id === id);
+                                if (s) overlappingBlocks.push(s);
+                            }
+                        });
 
-        this.showScheduleConflictSelector(overlappingBlocks, clickX, clickY);
-    });
-});
+                        this.showScheduleConflictSelector(overlappingBlocks, clickX, clickY);
+                    });
+                });
             }
 
             showScheduleConflictSelector(blocks, x, y) {
@@ -5748,6 +6103,298 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                 };
                 setTimeout(() => document.addEventListener('click', closeHandler), 10);
             }
+
+            // MOETODOS PARTE DE DOCUMENTOS //
+
+            renderDocuments() {
+                if (!this.data.documents) this.data.documents = [];
+                const container = document.getElementById('documentsList');
+
+                // Ya no insertamos la barra de filtros aquí; se hace una sola vez en switchView.
+                // Simplemente aplicamos los filtros y actualizamos la cuadrícula.
+                this.applyDocumentsFilter();
+                this.updateStorageInfo();
+
+                // Obtener documentos filtrados
+                const filtered = this.getFilteredDocuments();
+
+                // Actualizar información de almacenamiento
+                this.updateStorageInfo();
+
+                if (filtered.length === 0) {
+                    container.innerHTML = `<div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-tertiary);">📭 No hay documentos todavía.</div>`;
+                    return;
+                }
+
+                container.innerHTML = filtered.map(doc => this.createDocumentCard(doc)).join('');
+
+                // Eventos de las tarjetas
+                container.querySelectorAll('.document-card').forEach(card => {
+                    card.addEventListener('click', (e) => {
+                        if (e.target.closest('.doc-actions')) return;
+                        const docId = card.dataset.docId;
+                        const doc = this.data.documents.find(d => d.id === docId);
+                        if (doc) this.openDocumentPreview(doc);
+                    });
+                    // Botón eliminar
+                    const deleteBtn = card.querySelector('[data-delete-doc]');
+                    if (deleteBtn) {
+                        deleteBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const docId = deleteBtn.dataset.deleteDoc;
+                            this.deleteDocument(docId);
+                        });
+                    }
+                });
+            }
+
+            insertDocumentsFilterBar() {
+                const container = document.getElementById('documentsFilterBarContainer');
+                if (!container) return;
+                const subjects = this.data.subjects;
+                const subjectOptions = subjects.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+                container.innerHTML = `
+                    <div class="filter-bar-advanced">
+                        <input type="text" class="filter-input" id="docSearch" placeholder="🔍 Buscar...">
+                        <select class="filter-select" id="docFilterSubject">
+                            <option value="all">📚 Todas las asignaturas</option>
+                            ${subjectOptions}
+                        </select>
+                        <select class="filter-select" id="docFilterType">
+                            <option value="all">📋 Todos los tipos</option>
+                            <option value="pdf">PDF</option>
+                            <option value="image">Imagen</option>
+                            <option value="note">Nota</option>
+                        </select>
+                        <button class="btn-secondary" id="clearDocFilters">Limpiar</button>
+                    </div>
+                `;
+
+                // Eventos
+                document.getElementById('docSearch')?.addEventListener('input', () => this.applyDocumentsFilter());
+                document.getElementById('docFilterSubject')?.addEventListener('change', () => this.applyDocumentsFilter());
+                document.getElementById('docFilterType')?.addEventListener('change', () => this.applyDocumentsFilter());
+                document.getElementById('clearDocFilters')?.addEventListener('click', () => {
+                    const search = document.getElementById('docSearch');
+                    const subject = document.getElementById('docFilterSubject');
+                    const type = document.getElementById('docFilterType');
+                    if (search) search.value = '';
+                    if (subject) subject.value = 'all';
+                    if (type) type.value = 'all';
+                    this.applyDocumentsFilter();
+                });
+            }
+
+            applyDocumentsFilter() {
+                if (!this.data.documents) this.data.documents = [];
+                const container = document.getElementById('documentsList');
+                if (!container) return;
+
+                const filtered = this.getFilteredDocuments();
+                this.updateStorageInfo();
+
+                if (filtered.length === 0) {
+                    container.innerHTML = `<div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-tertiary);">📭 No hay documentos todavía.</div>`;
+                    return;
+                }
+
+                container.innerHTML = filtered.map(doc => this.createDocumentCard(doc)).join('');
+
+                // Reasignar eventos a las tarjetas
+                container.querySelectorAll('.document-card').forEach(card => {
+                    card.addEventListener('click', (e) => {
+                        if (e.target.closest('.doc-actions')) return;
+                        const docId = card.dataset.docId;
+                        const doc = this.data.documents.find(d => d.id === docId);
+                        if (doc) this.openDocumentPreview(doc);
+                    });
+                    const deleteBtn = card.querySelector('[data-delete-doc]');
+                    if (deleteBtn) {
+                        deleteBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            this.deleteDocument(deleteBtn.dataset.deleteDoc);
+                        });
+                    }
+                });
+            }
+
+            getFilteredDocuments() {
+                const search = document.getElementById('docSearch')?.value?.toLowerCase() || '';
+                const subject = document.getElementById('docFilterSubject')?.value || 'all';
+                const type = document.getElementById('docFilterType')?.value || 'all';
+
+                return this.data.documents.filter(doc => {
+                    if (search && !doc.title.toLowerCase().includes(search)) return false;
+                    if (subject !== 'all' && doc.subjectId !== subject) return false;
+                    if (type !== 'all' && doc.type !== type) return false;
+                    return true;
+                });
+            }
+
+            createDocumentCard(doc) {
+                const subject = this.getSubjectById(doc.subjectId);
+                let iconClass = '';
+                let iconFA = '';
+                if (doc.type === 'pdf') { iconClass = 'doc-icon-pdf'; iconFA = 'fa-file-pdf'; }
+                else if (doc.type === 'image') { iconClass = 'doc-icon-image'; iconFA = 'fa-file-image'; }
+                else { iconClass = 'doc-icon-note'; iconFA = 'fa-file-alt'; }
+
+                const sizeStr = doc.size ? this.formatFileSize(doc.size) : '';
+
+                return `
+                    <div class="document-card" data-doc-id="${doc.id}">
+                        <div class="doc-actions">
+                            <button class="btn-icon" data-delete-doc="${doc.id}" title="Eliminar"><i class="fas fa-trash"></i></button>
+                        </div>
+                        <i class="fas ${iconFA} ${iconClass}"></i>
+                        <div class="doc-title">${doc.title}</div>
+                        <div class="doc-meta">
+                            ${subject?.name || 'Sin asignatura'} · ${sizeStr}
+                        </div>
+                    </div>
+                `;
+            }
+
+            formatFileSize(bytes) {
+                if (bytes < 1024) return bytes + ' B';
+                else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+                else return (bytes / 1048576).toFixed(1) + ' MB';
+            }
+
+            updateStorageInfo() {
+                const totalBytes = this.data.documents.reduce((sum, d) => sum + (d.size || 0), 0);
+                const limitMB = 100; // límite configurable
+                const usedMB = totalBytes / (1024 * 1024);
+                document.getElementById('docStorageInfo').textContent = 
+                    `📦 ${usedMB.toFixed(1)} MB de ${limitMB} MB usados`;
+            }
+
+            openDocumentModal() {
+                this.updateSubjectSelects();
+                const subjectSelect = document.getElementById('documentSubjectSelect');
+                if (subjectSelect) {
+                    subjectSelect.innerHTML = this.data.subjects.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+                }
+                document.getElementById('documentModal').classList.add('active');
+                document.getElementById('documentForm').reset();
+                document.getElementById('docFileGroup').style.display = 'block';
+                document.getElementById('docNoteGroup').style.display = 'none';
+            }
+
+            async saveDocument() {
+                const type = document.getElementById('documentTypeSelect').value;
+                const subjectId = document.getElementById('documentSubjectSelect').value;
+                if (!subjectId) return this.showToast('Selecciona una asignatura', 'error');
+
+                let title, fileBlob, size = 0, docType;
+
+                if (type === 'note') {
+                    const noteContent = document.getElementById('documentNoteInput').value.trim();
+                    if (!noteContent) return this.showToast('Escribe algo en la nota', 'error');
+                    title = noteContent.substring(0, 50) + (noteContent.length > 50 ? '...' : '');
+                    fileBlob = new Blob([noteContent], { type: 'text/plain' });
+                    size = fileBlob.size;
+                    docType = 'note';
+                } else {
+                    const fileInput = document.getElementById('documentFileInput');
+                    const file = fileInput.files[0];
+                    if (!file) return this.showToast('Selecciona un archivo', 'error');
+                    title = file.name;
+                    fileBlob = file;
+                    size = file.size;
+                    // Determinar tipo
+                    if (file.type === 'application/pdf') docType = 'pdf';
+                    else if (file.type.startsWith('image/')) docType = 'image';
+                    else return this.showToast('Solo se permiten PDF e imágenes', 'error');
+                }
+
+                // Verificar límite de almacenamiento
+                const currentTotal = this.data.documents.reduce((sum, d) => sum + (d.size || 0), 0);
+                if (currentTotal + size > 100 * 1024 * 1024) {
+                    return this.showToast('❌ Se supera el límite de 100 MB. Elimina documentos antiguos.', 'error');
+                }
+
+                const docId = 'doc_' + Date.now();
+                try {
+                    await this.storage.saveFile(docId, fileBlob);
+                } catch (err) {
+                    console.error(err);
+                    return this.showToast('Error al guardar el archivo', 'error');
+                }
+
+                const newDoc = {
+                    id: docId,
+                    title,
+                    subjectId,
+                    type: docType,
+                    size,
+                    createdAt: new Date().toISOString()
+                };
+                this.data.documents.push(newDoc);
+                this.saveData();
+                this.closeModal();
+                this.renderDocuments();
+                this.showToast('Documento guardado', 'success');
+            }
+
+            async openDocumentPreview(doc) {
+                const modal = document.getElementById('documentPreviewModal');
+                const titleEl = document.getElementById('previewModalTitle');
+                const contentEl = document.getElementById('previewModalContent');
+                if (!modal || !contentEl) return;
+
+                titleEl.textContent = doc.title;
+                contentEl.innerHTML = '<div style="text-align:center; padding:40px;"><i class="fas fa-spinner fa-spin"></i> Cargando...</div>';
+                modal.classList.add('active');
+
+                try {
+                    const blob = await this.storage.getFile(doc.id);
+                    if (!blob) {
+                        contentEl.innerHTML = '<p style="text-align:center; color: var(--text-tertiary);">No se pudo cargar el archivo.</p>';
+                        return;
+                    }
+
+                    if (doc.type === 'note') {
+                        const text = await blob.text();
+                        contentEl.innerHTML = `<div class="note-content">${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
+                    } else if (doc.type === 'pdf') {
+                        const url = URL.createObjectURL(blob);
+                        contentEl.innerHTML = `<iframe src="${url}"></iframe>`;
+                    } else if (doc.type === 'image') {
+                        const url = URL.createObjectURL(blob);
+                        // Insertamos la imagen directamente, los estilos CSS se encargan de escalarla
+                        contentEl.innerHTML = `<img src="${url}" alt="${doc.title}">`;
+                    }
+                } catch (err) {
+                    console.error(err);
+                    contentEl.innerHTML = '<p style="text-align:center; color: var(--danger);">Error al cargar la vista previa.</p>';
+                }
+            }
+
+            closeDocumentPreview() {
+                const modal = document.getElementById('documentPreviewModal');
+                if (modal) modal.classList.remove('active');
+            }
+
+            async deleteDocument(docId) {
+                const doc = this.data.documents.find(d => d.id === docId);
+                if (!doc) return;
+                ConfirmDialog.show(`¿Eliminar "${doc.title}"?`, async () => {
+                    try {
+                        await this.storage.deleteFile(docId);
+                    } catch (err) { /* ignorar */ }
+                    this.data.documents = this.data.documents.filter(d => d.id !== docId);
+                    this.saveData();
+                    // Aplicar filtros y actualizar información (no reconstruye la barra de filtros)
+                    this.applyDocumentsFilter();
+                    this.updateStorageInfo();
+                    // Cerrar modal de vista previa si estuviera abierto
+                    this.closeDocumentPreview();
+                    this.showToast('Documento eliminado', 'success');
+                });
+            }
+
+            // FIN METODOS DOCUMENTOS // 
             
             renderHabits() {
                 this.updateHabitStats();
@@ -6040,95 +6687,127 @@ document.querySelectorAll('.schedule-block').forEach(block => {
             }
 
             // Método auxiliar para realizar la exportación
-            performExport() {
+            async performExport() {
                 try {
-                    const backup = { 
-                        version: '2.0.0', 
-                        exportDate: new Date().toISOString(), 
-                        data: this.data 
-                    };
+                    // Preguntar si quiere incluir los documentos
+                    const includeDocs = this.data.documents && this.data.documents.length > 0;
+                    let includeFiles = false;
                     
-                    const jsonString = JSON.stringify(backup, null, 2);
+                    if (includeDocs) {
+                        // Podemos usar un ConfirmDialog para preguntar (simplificado aquí)
+                        includeFiles = confirm('¿Incluir archivos adjuntos en la exportación? (puede aumentar el tamaño)');
+                    }
+
+                    // Construir el objeto de backup
+                    const backup = {
+                        version: '2.0.0',
+                        exportDate: new Date().toISOString(),
+                        data: JSON.parse(JSON.stringify(this.data)) // copia profunda
+                    };
+
+                    // Si se incluyen archivos, cargarlos y convertirlos a base64
+                    if (includeFiles) {
+                        backup.documents = {};
+                        for (const doc of this.data.documents) {
+                            try {
+                                const blob = await this.storage.getFile(doc.id);
+                                if (blob) {
+                                    const base64 = await this.blobToBase64(blob);
+                                    backup.documents[doc.id] = base64;
+                                }
+                            } catch (e) {
+                                console.warn(`No se pudo exportar el documento ${doc.id}`, e);
+                            }
+                        }
+                    }
+
+                    const jsonString = JSON.stringify(backup);
+                    
+                    // Verificar tamaño
+                    if (jsonString.length > 50 * 1024 * 1024) { // 50 MB
+                        this.showToast('❌ El backup supera los 50 MB. No se puede exportar.', 'error');
+                        return;
+                    }
+
+                    // Descargar
                     const blob = new Blob([jsonString], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
                     const date = new Date();
-                    const filename = `studyos-backup-${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}.studyos`;
-                    
+                    const filename = `studyos-backup-${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}.studyos`;
                     const a = document.createElement('a');
                     a.href = url;
                     a.download = filename;
-                    a.style.display = 'none';
-                    document.body.appendChild(a);
                     a.click();
-                    
-                    // Limpiar después de un tiempo para asegurar que la descarga comenzó
-                    setTimeout(() => {
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
-                    }, 100);
-                    
+                    setTimeout(() => { URL.revokeObjectURL(url); }, 100);
                     this.showToast('✅ Datos exportados correctamente', 'success');
                 } catch (error) {
                     console.error('Export error:', error);
                     this.showToast('❌ Error al exportar: ' + error.message, 'error');
                 }
             }
+
+            // Helper para convertir Blob a base64
+            blobToBase64(blob) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result.split(',')[1]); // solo la parte base64
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            }
             
             importData() {
                 const input = document.createElement('input');
-                input.type = 'file'; 
+                input.type = 'file';
                 input.accept = '.json,.studyos,application/json';
-                
+
                 input.onchange = (e) => {
-                    const file = e.target.files[0]; 
+                    const file = e.target.files[0];
                     if (!file) return;
-                    
-                    // ========== VALIDACIÓN DE TAMAÑO ==========
+
                     const maxSize = 50 * 1024 * 1024; // 50 MB máximo
                     if (file.size > maxSize) {
                         this.showToast('❌ El archivo es demasiado grande (máximo 50MB)', 'error');
                         return;
                     }
-                    
+
                     const reader = new FileReader();
-                    reader.onload = (event) => {
+                    reader.onload = async (event) => {
                         let loadingOverlay = null;
-                        
+
                         try {
                             const backup = JSON.parse(event.target.result);
-                            
+
                             // Validar versión
                             const requiredVersion = '2.0.0';
                             if (backup.version !== requiredVersion) {
                                 this.showToast(`⚠️ Versión incompatible: ${backup.version} (requiere ${requiredVersion})`, 'error');
                                 return;
                             }
-                            
+
                             // Validar estructura mínima
-                            if (!backup.data || 
+                            if (!backup.data ||
                                 !Array.isArray(backup.data.tasks) ||
                                 !Array.isArray(backup.data.subjects) ||
                                 !Array.isArray(backup.data.exams) ||
                                 !Array.isArray(backup.data.habits) ||
                                 !Array.isArray(backup.data.objectives) ||
-                                !Array.isArray(backup.data.schedules) ||   // ← Añadir esta línea
+                                !Array.isArray(backup.data.schedules) ||
                                 !backup.data.user) {
                                 throw new Error('Estructura de datos inválida');
                             }
-                            
-                            // Validar que las tareas tengan subjectId existente
+
+                            // Validar asignaturas existentes en las tareas
                             const validSubjectIds = new Set(backup.data.subjects.map(s => s.id));
                             const invalidTasks = backup.data.tasks.filter(t => t.subjectId && !validSubjectIds.has(t.subjectId));
-                            
                             if (invalidTasks.length > 0) {
                                 console.warn(`${invalidTasks.length} tareas con asignatura inexistente, se reasignarán`);
                                 invalidTasks.forEach(task => task.subjectId = null);
                             }
-                            
+
                             // Validar fechas
                             const dateFields = ['dueDate', 'date', 'deadline'];
                             const allItems = [...backup.data.tasks, ...backup.data.exams, ...backup.data.objectives];
-                            
                             for (const item of allItems) {
                                 for (const field of dateFields) {
                                     if (item[field] && isNaN(new Date(item[field]).getTime())) {
@@ -6136,31 +6815,46 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                                     }
                                 }
                             }
-                            
-                            const hasExistingData = this.data.tasks.length > 0 || 
-                                                this.data.subjects.length > 1 || 
+
+                            const hasExistingData = this.data.tasks.length > 0 ||
+                                                this.data.subjects.length > 1 ||
                                                 this.data.exams.length > 0;
-                            
-                            const performImport = () => {
+
+                            const performImport = async () => {
                                 loadingOverlay = LoadingOverlay.show('Importando datos...', 'Procesando archivo de backup');
                                 let progress = 0;
-                                
-                                const interval = setInterval(() => {
+
+                                const interval = setInterval(async () => {
                                     progress += 20;
                                     LoadingOverlay.updateProgress(progress);
-                                    
+
                                     if (progress >= 100) {
                                         clearInterval(interval);
                                         try {
                                             // Importar datos
                                             this.data = backup.data;
-                                            
+
+                                            // Restaurar archivos de documentos si existen
+                                            if (backup.documents && this.data.documents) {
+                                                for (const doc of this.data.documents) {
+                                                    const base64 = backup.documents[doc.id];
+                                                    if (base64) {
+                                                        try {
+                                                            const blob = this.base64ToBlob(base64, doc.type);
+                                                            await this.storage.saveFile(doc.id, blob);
+                                                        } catch (e) {
+                                                            console.warn(`No se pudo importar el documento ${doc.id}`, e);
+                                                        }
+                                                    }
+                                                }
+                                            }
+
                                             // Limpiar cachés
                                             if (this.progressCache) this.progressCache.clear();
-                                            
+
                                             this.buildIndexes();
                                             this.saveData();
-                                            
+
                                             // Limpiar gráficos viejos
                                             ['radar', 'doughnut', 'subjects', 'grades', 'habit'].forEach(chart => {
                                                 if (this.charts[chart]) {
@@ -6168,26 +6862,26 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                                                     this.charts[chart] = null;
                                                 }
                                             });
-                                            
+
                                             // Limpiar observer del radar
                                             if (this._radarObserver) {
                                                 this._radarObserver.disconnect();
                                                 this._radarObserver = null;
                                             }
-                                            
+
                                             this.refreshAllViews();
-                                            
+
                                             if (this.currentView === 'planner') {
                                                 this.renderPlanner();
                                             }
-                                            
+
                                             this.updateAllSubjectsProgress();
                                             this.updateSubjectSelects();
                                             this.updateExamSubjectSelect();
-                                            
+
                                             if (loadingOverlay) LoadingOverlay.hide();
                                             this.showToast('✅ Datos importados correctamente', 'success');
-                                            
+
                                         } catch (importError) {
                                             if (loadingOverlay) LoadingOverlay.hide();
                                             this.showToast(`❌ Error al importar: ${importError.message}`, 'error');
@@ -6196,59 +6890,85 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                                     }
                                 }, 80);
                             };
-                            
+
                             if (hasExistingData) {
                                 ConfirmDialog.show('⚠️ Ya existen datos. ¿Reemplazarlos?', performImport, () => this.showToast('Importación cancelada', 'info'));
                             } else {
                                 ConfirmDialog.show('📥 ¿Importar estos datos?', performImport, () => this.showToast('Importación cancelada', 'info'));
                             }
-                            
+
                         } catch (error) {
                             console.error('Import error:', error);
                             this.showToast(`❌ Error: ${error.message}`, 'error');
                             if (loadingOverlay) LoadingOverlay.hide();
                         }
                     };
-                    
+
                     reader.onerror = () => {
                         this.showToast('❌ Error al leer el archivo', 'error');
                     };
-                    
+
                     reader.readAsText(file);
                 };
-                
+
                 input.click();
+            }
+
+            // Helper para convertir base64 a Blob
+            base64ToBlob(base64, type) {
+                const byteCharacters = atob(base64);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                let mimeType = 'application/octet-stream';
+                if (type === 'pdf') mimeType = 'application/pdf';
+                else if (type === 'image') mimeType = 'image/png';
+                else if (type === 'note') mimeType = 'text/plain';
+                return new Blob([byteArray], { type: mimeType });
             }
             
             clearAllData() {
                 ConfirmDialog.show('⚠️ ¿Eliminar ABSOLUTAMENTE TODOS los datos?\n\nEsta acción no se puede deshacer.', () => {
                     let loadingOverlay = null;
-                    
+
                     try {
                         loadingOverlay = LoadingOverlay.show('Limpiando datos...', 'Eliminando toda la información');
                         let progress = 0;
-                        
-                        const interval = setInterval(() => {
+
+                        const interval = setInterval(async () => {
                             progress += 25;
                             LoadingOverlay.updateProgress(progress);
-                            
+
                             if (progress >= 100) {
                                 clearInterval(interval);
-                                
+
                                 try {
                                     // Guardar preferencias que NO deben borrarse
                                     const hasSeenApp = this.storage.getItem('studyos_has_seen_app');
                                     const savedTheme = this.storage.getItem('studyos_theme');
                                     const savedUser = { ...this.data.user };
-                                    
-                                    // Limpiar TODO el almacenamiento (usa el StorageManager)
+
+                                    // Eliminar todos los archivos de documentos guardados
+                                    if (this.data.documents && this.data.documents.length > 0) {
+                                        for (const doc of this.data.documents) {
+                                            try {
+                                                await this.storage.deleteFile(doc.id);
+                                            } catch (e) {
+                                                // ignorar errores individuales
+                                            }
+                                        }
+                                    }
+
+                                    // Limpiar TODO el almacenamiento (localStorage / SQLite)
                                     this.storage.clear();
-                                    
+
                                     // Restaurar preferencias
                                     if (hasSeenApp) this.storage.setItem('studyos_has_seen_app', hasSeenApp);
                                     if (savedTheme) this.storage.setItem('studyos_theme', savedTheme);
-                                    
-                                    // Reiniciar datos (sin serializar manualmente)
+
+                                    // Reiniciar datos
                                     this.data = {
                                         tasks: [],
                                         subjects: [],
@@ -6256,21 +6976,21 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                                         habits: [],
                                         objectives: [],
                                         schedules: [],
-                                        documents: [],        // ← añadido para gestor documental
+                                        documents: [],
                                         user: savedUser
                                     };
-                                    
+
                                     // Limpiar cachés
                                     if (this.progressCache) this.progressCache.clear();
                                     if (this.taskIndex) this.taskIndex.clear();
                                     if (this.subjectIndex) this.subjectIndex.clear();
                                     if (this.examIndex) this.examIndex.clear();
-                                    
+
                                     this.buildIndexes();
-                                    
-                                    // Guardar el nuevo estado limpio (StorageManager serializa solo)
+
+                                    // Guardar el nuevo estado limpio
                                     this.storage.setItem('studyos_pro_v6', this.data);
-                                    
+
                                     // Destruir gráficos existentes
                                     ['radar', 'doughnut', 'subjects', 'grades', 'habit'].forEach(chart => {
                                         if (this.charts[chart]) {
@@ -6278,20 +6998,20 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                                             this.charts[chart] = null;
                                         }
                                     });
-                                    
+
                                     // Limpiar observer del radar
                                     if (this._radarObserver) {
                                         this._radarObserver.disconnect();
                                         this._radarObserver = null;
                                     }
-                                    
+
                                     // Cambiar a dashboard y limpiar vistas
                                     this.switchView('dashboard');
                                     this.updateSubjectSelects();
                                     this.updateExamSubjectSelect();
                                     this.updateUserDisplay();
                                     this.updateAllSubjectsProgress();
-                                    
+
                                     // Marcar todas las vistas como sucias
                                     this.viewsDirty = {
                                         planner: true,
@@ -6301,7 +7021,7 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                                         habits: true,
                                         objectives: true
                                     };
-                                    
+
                                     // Renderizar todo de nuevo
                                     setTimeout(() => {
                                         this.renderDashboard();
@@ -6314,10 +7034,10 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                                         this.updateGradesChart();
                                         this.updateHabitChart();
                                     }, 50);
-                                    
+
                                     if (loadingOverlay) LoadingOverlay.hide();
                                     this.showToast('✅ Todos los datos han sido eliminados', 'success');
-                                    
+
                                 } catch (clearError) {
                                     if (loadingOverlay) LoadingOverlay.hide();
                                     this.showToast(`❌ Error al limpiar: ${clearError.message}`, 'error');
@@ -6325,13 +7045,22 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                                 }
                             }
                         }, 80);
-                        
+
                     } catch (error) {
                         if (loadingOverlay) LoadingOverlay.hide();
                         this.showToast('❌ Error al iniciar la limpieza', 'error');
                         console.error('Clear init error:', error);
                     }
                 }, () => this.showToast('Operación cancelada', 'info'));
+            }
+
+            async clearAllFiles() {
+                return new Promise((resolve) => {
+                    const request = indexedDB.deleteDatabase('StudyOSDocuments');
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => resolve(); // ignorar errores
+                    request.onblocked = () => resolve();
+                });
             }
             
             openTaskModal(task = null) {
@@ -7232,7 +7961,11 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                 this.setupSettingsListeners();
 
                 // Apariencia
-                document.getElementById('themeSelect').value = this.storage.getItem('studyos_theme') || 'light';
+                // Activar el botón de tema correspondiente
+                const savedTheme = this.storage.getItem('studyos_theme') || 'light';
+                document.querySelectorAll('.theme-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.theme === savedTheme);
+                });
                 const savedAccent = this.storage.getItem('studyos_accent') || '#0066FF';
                 document.getElementById('accentColorInput').value = savedAccent;
                 document.getElementById('accentColorText').value = savedAccent;
@@ -7384,6 +8117,56 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                 }
             }
 
+            // Abrir vista ampliada del avatar
+            openAvatarView() {
+                const user = this.data.user;
+                const modal = document.getElementById('avatarViewModal');
+                const container = document.getElementById('avatarViewContainer');
+                const img = document.getElementById('avatarViewImage');
+                if (!modal || !container || !img) return;
+
+                // Limpiar contenido previo (imagen + cualquier emoji anterior)
+                img.src = '';
+                img.style.display = 'none';
+                const oldEmoji = container.querySelector('.avatar-emoji-large');
+                if (oldEmoji) oldEmoji.remove();
+
+                if (user.avatarImage) {
+                    // Imagen cargada desde el ordenador
+                    img.src = user.avatarImageLarge || user.avatarImage;
+                    img.style.display = 'block';
+                } else if (user.avatarStock) {
+                    // Avatar de stock: crear un div centrado con el emoji
+                    const stock = this.stockAvatars.find(s => s.id === user.avatarStock);
+                    const emojiDiv = document.createElement('div');
+                    emojiDiv.className = 'avatar-emoji-large';
+                    emojiDiv.style.cssText = 'font-size:200px;line-height:1;display:flex;align-items:center;justify-content:center;width:100%;height:100%;';
+                    emojiDiv.textContent = stock ? stock.emoji : '😊';
+                    container.appendChild(emojiDiv);
+                } else {
+                    this.showToast('No hay imagen de avatar para ampliar', 'info');
+                    return;
+                }
+                modal.classList.add('active');
+            }
+
+            // Cerrar vista ampliada del avatar
+            closeAvatarView() {
+                const modal = document.getElementById('avatarViewModal');
+                if (modal) modal.classList.remove('active');
+                // Limpiar completamente el contenedor
+                const container = document.getElementById('avatarViewContainer');
+                if (container) {
+                    const emojiDiv = container.querySelector('.avatar-emoji-large');
+                    if (emojiDiv) emojiDiv.remove();
+                }
+                const img = document.getElementById('avatarViewImage');
+                if (img) {
+                    img.src = '';
+                    img.style.display = 'none';
+                }
+            }
+
             switchSettingsTab(tabId) {
                 // Activar botón
                 document.querySelectorAll('.settings-tab').forEach(btn => {
@@ -7401,7 +8184,6 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                 this._settingsListenersSetup = true;
 
                 // Referencias a elementos (no se reemplazarán)
-                const themeSelect = document.getElementById('themeSelect');
                 const accentInput = document.getElementById('accentColorInput');
                 const accentText = document.getElementById('accentColorText');
                 const uploadBtn = document.getElementById('uploadAvatarBtn');
@@ -7420,8 +8202,16 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                     });
                 });
 
-                // Tema
-                themeSelect?.addEventListener('change', e => this.applyTheme(e.target.value));
+                // Tema (nuevos botones)
+                document.querySelectorAll('.theme-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const theme = btn.dataset.theme;
+                        this.applyTheme(theme);
+                        // Actualizar estado visual
+                        document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                    });
+                });
 
                 // Acento
                 accentInput?.addEventListener('input', e => {
@@ -7451,28 +8241,39 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                     reader.onload = (ev) => {
                         const img = new Image();
                         img.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            canvas.width = 100;
-                            canvas.height = 100;
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0, 100, 100);
-                            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                            this.data.user.avatarImage = dataUrl;
-                            this.data.user.avatarStock = null;   // quitar stock
-                            this.applyAvatarState();              // método centralizado
+                            // Avatar pequeño (100x100)
+                            const smallCanvas = document.createElement('canvas');
+                            smallCanvas.width = 100;
+                            smallCanvas.height = 100;
+                            const sCtx = smallCanvas.getContext('2d');
+                            sCtx.drawImage(img, 0, 0, 100, 100);
+                            const smallDataUrl = smallCanvas.toDataURL('image/jpeg', 0.8);
+
+                            // Avatar grande (400x400) para vista ampliada
+                            const largeCanvas = document.createElement('canvas');
+                            largeCanvas.width = 400;
+                            largeCanvas.height = 400;
+                            const lCtx = largeCanvas.getContext('2d');
+                            lCtx.drawImage(img, 0, 0, 400, 400);
+                            const largeDataUrl = largeCanvas.toDataURL('image/jpeg', 0.9);
+
+                            this.data.user.avatarImage = smallDataUrl;
+                            this.data.user.avatarImageLarge = largeDataUrl; // nuevo campo
+                            this.data.user.avatarStock = null;
+                            this.applyAvatarState();
                             this.saveData();
                             this.updateUserDisplay();
                         };
                         img.src = ev.target.result;
                     };
                     reader.readAsDataURL(file);
-                    // Limpiar el input para permitir volver a seleccionar el mismo archivo
                     e.target.value = '';
                 });
 
                 // Eliminar foto
                 removeBtn?.addEventListener('click', () => {
                     this.data.user.avatarImage = null;
+                    this.data.user.avatarImageLarge = null;
                     this.applyAvatarState();
                     this.saveData();
                     this.updateUserDisplay();
@@ -7486,6 +8287,11 @@ document.querySelectorAll('.schedule-block').forEach(block => {
                     }
                     this.saveData();
                     this.updateUserDisplay();
+                });
+
+                // Click en avatar para ampliar
+                document.getElementById('avatarPreview')?.addEventListener('click', () => {
+                    this.openAvatarView();
                 });
 
                 // Guardar perfil
