@@ -7882,7 +7882,7 @@ body.dragging-active {
                         'Authorization': `Bearer ${apiKey}`
                     },
                     body: JSON.stringify({
-                        model: 'deepseek-chat',
+                        model: 'deepseek-v4-flash',  // ← Asegúrate de que esta línea sea así
                         messages: [
                             { role: 'system', content: 'Eres un asistente de estudio experto y amigable. Responde siempre en español.' },
                             { role: 'user', content: `Contexto del documento:\n${context}\n\nPregunta del estudiante: ${query}` }
